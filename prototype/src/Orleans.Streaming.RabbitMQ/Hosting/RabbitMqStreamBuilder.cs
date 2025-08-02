@@ -1,0 +1,95 @@
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Orleans.Configuration;
+using Orleans.Streaming.RabbitMQ;
+using Orleans.Streaming.RabbitMQ.Adapters;
+using Orleans.Streaming.RabbitMQ.Adapters.Amqp;
+using Orleans.Streams;
+
+namespace Orleans.Hosting;
+
+public interface IRabbitMqStreamConfigurator : INamedServiceConfigurator { }
+
+public static class RabbitMqStreamConfiguratorExtensions
+{
+    public static void ConfigureRabbitMq(this IRabbitMqStreamConfigurator configurator, Action<OptionsBuilder<RabbitMqOptions>> configureOptions)
+    {
+        configurator.Configure(configureOptions);
+    }
+
+    public static void UseDataAdapter<TQueueDataAdapter>(this IRabbitMqStreamConfigurator configurator)
+        where TQueueDataAdapter : class, IRabbitMqDataAdapter
+    {
+        configurator.ConfigureComponent<IRabbitMqDataAdapter>((sp, _) => ActivatorUtilities.CreateInstance<TQueueDataAdapter>(sp));
+    }
+
+    public static void UseDataAdapter(this IRabbitMqStreamConfigurator configurator, Func<IServiceProvider, string, IRabbitMqDataAdapter> factory)
+    {
+        configurator.ConfigureComponent(factory);
+    }
+}
+
+public interface ISiloRabbitMqStreamConfigurator : IRabbitMqStreamConfigurator, ISiloPersistentStreamConfigurator { }
+
+public static class SiloRabbitMqStreamConfiguratorExtensions
+{
+    public static void ConfigureCacheSize(this ISiloRabbitMqStreamConfigurator configurator, int cacheSize = SimpleQueueCacheOptions.DEFAULT_CACHE_SIZE)
+    {
+        configurator.Configure<SimpleQueueCacheOptions>(ob => ob.Configure(options => options.CacheSize = cacheSize));
+    }
+
+    public static void ConfigurePartitioning(this ISiloRabbitMqStreamConfigurator configurator, int partitionCount = HashRingStreamQueueMapperOptions.DEFAULT_NUM_QUEUES)
+    {
+        configurator.Configure<HashRingStreamQueueMapperOptions>(ob => ob.Configure(options => options.TotalQueueCount = partitionCount));
+    }
+}
+
+public sealed class SiloRabbitMqStreamConfigurator : SiloPersistentStreamConfigurator, ISiloRabbitMqStreamConfigurator
+{
+    public SiloRabbitMqStreamConfigurator(string name, Action<Action<IServiceCollection>> configureServicesDelegate)
+        : base(name, configureServicesDelegate, RabbitMqAmqpAdapterFactory.Create)
+    {
+        this.ConfigureComponent(RabbitMqOptionsValidator.Create);
+        this.ConfigureComponent(SimpleQueueCacheOptionsValidator.Create);
+        this.Configure<RabbitMqOptions>(ob
+            => ob.PostConfigure(options 
+                => options.ExchangeName = string.IsNullOrWhiteSpace(options.ExchangeName)
+                    ? name
+                    : options.ExchangeName));
+
+        this.ConfigureComponent<IRabbitMqConnectionProvider>((sp, key) =>
+        {
+            var options = sp.GetOptionsByName<RabbitMqOptions>(key);
+            return ActivatorUtilities.CreateInstance<RabbitMqConnectionProvider>(sp, options);
+        });
+
+        this.ConfigureDelegate(services => services.TryAddSingleton<IRabbitMqDataAdapter, RabbitMqDataAdapter>());
+    }
+}
+
+public interface IClusterClientRabbitMqStreamConfigurator : IRabbitMqStreamConfigurator, IClusterClientPersistentStreamConfigurator { }
+
+public class ClusterClientRabbitMqStreamConfigurator : ClusterClientPersistentStreamConfigurator, IClusterClientRabbitMqStreamConfigurator
+{
+    public ClusterClientRabbitMqStreamConfigurator(string name, IClientBuilder clientBuilder)
+        : base(name, clientBuilder, RabbitMqAmqpAdapterFactory.Create)
+    {
+        this.ConfigureComponent(RabbitMqOptionsValidator.Create);
+
+        this.Configure<RabbitMqOptions>(ob
+            => ob.PostConfigure(options
+                => options.ExchangeName = string.IsNullOrWhiteSpace(options.ExchangeName)
+                    ? name
+                    : options.ExchangeName));
+
+        this.ConfigureComponent<IRabbitMqConnectionProvider>((sp, key) =>
+        {
+            var options = sp.GetOptionsByName<RabbitMqOptions>(key);
+            return ActivatorUtilities.CreateInstance<RabbitMqConnectionProvider>(sp, options);
+        });
+
+        this.ConfigureDelegate(services => services.TryAddSingleton<IRabbitMqDataAdapter, RabbitMqDataAdapter>());
+    }
+}

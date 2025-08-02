@@ -1,0 +1,101 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.12.35527.113
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Orleans.Streaming.RabbitMQ", "src\Orleans.Streaming.RabbitMQ\Orleans.Streaming.RabbitMQ.csproj", "{858D1633-0FCE-401E-96E4-B0931E9155C7}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{AE690D90-44D8-4DDF-AF3D-D97391EAE13E}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+		Directory.Build.props = Directory.Build.props
+		Directory.Packages.props = Directory.Packages.props
+		nuget.config = nuget.config
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{8940A5B1-034A-46D7-B5B3-D2EEF6E8BC2A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{6FE7996A-EED0-4238-B43F-F86F50BD6F8E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Orleans.Streaming.RabbitMQ.Tests", "tests\Orleans.Streaming.RabbitMQ.Tests\Orleans.Streaming.RabbitMQ.Tests.csproj", "{D7F61D67-482E-4F00-8A4B-0F8FC7180F71}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "playground", "playground", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Simple", "Simple", "{CA05411F-6C63-47F8-B5D1-DAC5234A4C51}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SiloHost", "playground\Simple\SiloHost\SiloHost.csproj", "{13DDAAAD-A07C-458D-99E3-72BCF4747F1B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Common", "playground\Common\Common.csproj", "{6E4F6665-50EE-4F5B-946A-D9A4E8C7C2BA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Client", "playground\Simple\Client\Client.csproj", "{036D8563-A31D-4693-93A0-31D7C14A6622}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GrainInterfaces", "playground\Simple\GrainInterfaces\GrainInterfaces.csproj", "{76C096E2-F4AC-495E-8394-C31C0E80F044}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Grains", "playground\Simple\Grains\Grains.csproj", "{3D892BFA-60D6-4657-9CAD-22067BB4C45A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AspireHost.AppHost", "playground\Simple\AspireHost\AspireHost\AspireHost.AppHost\AspireHost.AppHost.csproj", "{F0D435F5-E4F3-4216-AAED-C69AA676F990}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AspireHost.ServiceDefaults", "playground\Simple\AspireHost\AspireHost\AspireHost.ServiceDefaults\AspireHost.ServiceDefaults.csproj", "{69418784-EDE1-427E-18A4-ED08FE9A4694}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{858D1633-0FCE-401E-96E4-B0931E9155C7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{858D1633-0FCE-401E-96E4-B0931E9155C7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{858D1633-0FCE-401E-96E4-B0931E9155C7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{858D1633-0FCE-401E-96E4-B0931E9155C7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D7F61D67-482E-4F00-8A4B-0F8FC7180F71}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D7F61D67-482E-4F00-8A4B-0F8FC7180F71}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D7F61D67-482E-4F00-8A4B-0F8FC7180F71}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D7F61D67-482E-4F00-8A4B-0F8FC7180F71}.Release|Any CPU.Build.0 = Release|Any CPU
+		{13DDAAAD-A07C-458D-99E3-72BCF4747F1B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{13DDAAAD-A07C-458D-99E3-72BCF4747F1B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{13DDAAAD-A07C-458D-99E3-72BCF4747F1B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{13DDAAAD-A07C-458D-99E3-72BCF4747F1B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6E4F6665-50EE-4F5B-946A-D9A4E8C7C2BA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6E4F6665-50EE-4F5B-946A-D9A4E8C7C2BA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6E4F6665-50EE-4F5B-946A-D9A4E8C7C2BA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6E4F6665-50EE-4F5B-946A-D9A4E8C7C2BA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{036D8563-A31D-4693-93A0-31D7C14A6622}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{036D8563-A31D-4693-93A0-31D7C14A6622}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{036D8563-A31D-4693-93A0-31D7C14A6622}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{036D8563-A31D-4693-93A0-31D7C14A6622}.Release|Any CPU.Build.0 = Release|Any CPU
+		{76C096E2-F4AC-495E-8394-C31C0E80F044}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{76C096E2-F4AC-495E-8394-C31C0E80F044}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{76C096E2-F4AC-495E-8394-C31C0E80F044}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{76C096E2-F4AC-495E-8394-C31C0E80F044}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3D892BFA-60D6-4657-9CAD-22067BB4C45A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3D892BFA-60D6-4657-9CAD-22067BB4C45A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3D892BFA-60D6-4657-9CAD-22067BB4C45A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3D892BFA-60D6-4657-9CAD-22067BB4C45A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F0D435F5-E4F3-4216-AAED-C69AA676F990}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F0D435F5-E4F3-4216-AAED-C69AA676F990}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F0D435F5-E4F3-4216-AAED-C69AA676F990}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F0D435F5-E4F3-4216-AAED-C69AA676F990}.Release|Any CPU.Build.0 = Release|Any CPU
+		{69418784-EDE1-427E-18A4-ED08FE9A4694}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{69418784-EDE1-427E-18A4-ED08FE9A4694}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{69418784-EDE1-427E-18A4-ED08FE9A4694}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{69418784-EDE1-427E-18A4-ED08FE9A4694}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{858D1633-0FCE-401E-96E4-B0931E9155C7} = {8940A5B1-034A-46D7-B5B3-D2EEF6E8BC2A}
+		{D7F61D67-482E-4F00-8A4B-0F8FC7180F71} = {6FE7996A-EED0-4238-B43F-F86F50BD6F8E}
+		{CA05411F-6C63-47F8-B5D1-DAC5234A4C51} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{13DDAAAD-A07C-458D-99E3-72BCF4747F1B} = {CA05411F-6C63-47F8-B5D1-DAC5234A4C51}
+		{6E4F6665-50EE-4F5B-946A-D9A4E8C7C2BA} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{036D8563-A31D-4693-93A0-31D7C14A6622} = {CA05411F-6C63-47F8-B5D1-DAC5234A4C51}
+		{76C096E2-F4AC-495E-8394-C31C0E80F044} = {CA05411F-6C63-47F8-B5D1-DAC5234A4C51}
+		{3D892BFA-60D6-4657-9CAD-22067BB4C45A} = {CA05411F-6C63-47F8-B5D1-DAC5234A4C51}
+		{F0D435F5-E4F3-4216-AAED-C69AA676F990} = {CA05411F-6C63-47F8-B5D1-DAC5234A4C51}
+		{69418784-EDE1-427E-18A4-ED08FE9A4694} = {CA05411F-6C63-47F8-B5D1-DAC5234A4C51}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9D1E2798-E9A0-438A-AAA9-01914B1DCADC}
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.StackExchange.Redis" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Orleans.Clustering.Redis" />
+    <PackageReference Include="Microsoft.Orleans.Server" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Orleans.Streaming.RabbitMQ\Orleans.Streaming.RabbitMQ.csproj" />
+    <ProjectReference Include="..\..\Common\Common.csproj" />
+    <ProjectReference Include="..\AspireHost\AspireHost\AspireHost.ServiceDefaults\AspireHost.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\GrainInterfaces\GrainInterfaces.csproj" />
+    <ProjectReference Include="..\Grains\Grains.csproj" />
+  </ItemGroup>
+
+</Project>

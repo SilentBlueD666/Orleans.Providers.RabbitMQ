@@ -1,0 +1,11 @@
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace Orleans.Streaming.RabbitMQ.Tests.Grains;
+
+public interface IConsumerGrain : IGrainWithGuidKey
+{
+    Task StartConsuming(Guid streamGuid);
+    Task<List<string>> GetReceivedMessages();
+}
