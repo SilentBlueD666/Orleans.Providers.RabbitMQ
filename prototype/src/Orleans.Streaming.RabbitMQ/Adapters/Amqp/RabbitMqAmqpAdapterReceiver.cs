@@ -22,7 +22,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
 
     private readonly string _providerName;
     private readonly string _queueName;
-    private readonly IRabbitMqConsumerConnector _consumerConnector;
+    private readonly IRabbitMqConnector _consumerConnector;
     private readonly RabbitMqOptions _options;
     private readonly IRabbitMqDataAdapter _dataAdapter;
     private readonly ILogger _logger;

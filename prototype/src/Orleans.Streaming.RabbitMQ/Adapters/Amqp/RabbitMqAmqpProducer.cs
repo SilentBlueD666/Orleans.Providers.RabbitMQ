@@ -23,7 +23,7 @@ internal sealed partial class RabbitMqAmqpProducer(
 {
     private readonly string _providerName = providerName;
     private readonly string _queueName = queueName;
-    private readonly IRabbitMqProducerConnector _producerConnector = connectorFactory.CreateProducerConnector();
+    private readonly IRabbitMqConnector _producerConnector = connectorFactory.CreateProducerConnector();
     private readonly RabbitMqOptions _options = options;
     private readonly IRabbitMqDataAdapter _dataAdapter = dataAdapter;
     private readonly TimeProvider _timeProvider = timeProvider;
