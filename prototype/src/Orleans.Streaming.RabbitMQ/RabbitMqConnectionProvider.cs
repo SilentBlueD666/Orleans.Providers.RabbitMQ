@@ -12,9 +12,8 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
     public const string DefaultSenderConnectionName = "Orleans-Streaming-RabbitMQ-Sender";
     public const string DefaultReceiverConnectionName = "Orleans-Streaming-RabbitMQ-Receiver";
 
-    private readonly SemaphoreSlim _senderLock = new(1, 1);
-    private readonly SemaphoreSlim _receiveLock = new(1, 1);
     private readonly RabbitMqOptions _options;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<RabbitMqConnectionProvider> _logger;
 
     private readonly ConnectionFactory _factory;
@@ -23,12 +22,12 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
     private readonly string _senderConnectionName = DefaultSenderConnectionName;
     private readonly string _receiverConnectionName = DefaultReceiverConnectionName;
 
-    private IConnection? _sendConnection;
-    private IConnection? _receiveConnection;
+    private readonly ConcurrentDictionary<string, ManagedConnection> _connections = new();
+    private readonly SemaphoreSlim _connectionLock = new(1, 1);
 
     private bool _disposed;
 
-    public RabbitMqConnectionProvider(RabbitMqOptions options, ILoggerFactory loggerFactory)
+    public RabbitMqConnectionProvider(RabbitMqOptions options, TimeProvider timeProvider, ILoggerFactory loggerFactory)
     {
         _logger = loggerFactory.CreateLogger<RabbitMqConnectionProvider>();
 
@@ -67,6 +66,7 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
         }
 
         _options = options;
+        _timeProvider = timeProvider;
     }
 
     private async Task<IConnection> CreateConnection(string connectionName, CancellationToken cancellationToken)
@@ -95,60 +95,60 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
         return connection;
     }
 
-    public async ValueTask<IConnection> GetConnection(string? clientName, CancellationToken cancellationToken = default)
+    public async ValueTask<IConnection> GetConnection(string? connectionName, CancellationToken cancellationToken = default)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(RabbitMqConnectionProvider));
-
-        return await CreateConnection(clientName ?? DefaultConnectionName, cancellationToken).ConfigureAwait(false);
+        return await CreateConnection(connectionName ?? DefaultConnectionName, cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask<IConnection> GetSendConnection(CancellationToken cancellationToken = default)
-    {
-        if (_disposed) throw new ObjectDisposedException(nameof(RabbitMqConnectionProvider));
-
-        if (_sendConnection is { IsOpen: true }) return _sendConnection;
-
-        await _senderLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-
-        try
-        {
-            if (_sendConnection is { IsOpen: true }) return _sendConnection;
-
-            if (_sendConnection is not null)
-                await _sendConnection.DisposeAsync().ConfigureAwait(false);
-
-            _sendConnection = await CreateConnection(_senderConnectionName, cancellationToken).ConfigureAwait(false);
-
-            return _sendConnection;
-        }
-        finally
-        {
-            _senderLock.Release();
-        }
-    }
+        => await GetNamedConnection(_senderConnectionName, cancellationToken).ConfigureAwait(false);
 
     public async ValueTask<IConnection> GetReceiveConnection(CancellationToken cancellationToken = default)
+        => await GetNamedConnection(_receiverConnectionName, cancellationToken).ConfigureAwait(false);
+
+    private async ValueTask<IConnection> GetNamedConnection(string connectionName, CancellationToken cancellationToken)
     {
         if (_disposed) throw new ObjectDisposedException(nameof(RabbitMqConnectionProvider));
 
-        if (_receiveConnection is { IsOpen: true }) return _receiveConnection;
+        if (_connections.TryGetValue(connectionName, out var managedConnection) && managedConnection.IsHealthy)
+        {
+            managedConnection.LastUsed = _timeProvider.GetUtcNow();
+            return managedConnection.Connection;
+        }
 
-        await _receiveLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-
+        await _connectionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (_receiveConnection is { IsOpen: true }) return _receiveConnection;
+            if (_connections.TryGetValue(connectionName, out managedConnection) && managedConnection.IsHealthy)
+            {
+                managedConnection.LastUsed = _timeProvider.GetUtcNow();
+                return managedConnection.Connection;
+            }
 
-            if (_receiveConnection is not null)
-                await _receiveConnection.DisposeAsync().ConfigureAwait(false);
+            try
+            {
+                if (managedConnection is not null)
+                    await managedConnection.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                LogErrorClosingConnection(ex, connectionName);
+            }
 
-            _receiveConnection = await CreateConnection(_receiverConnectionName, cancellationToken).ConfigureAwait(false);
+            var connection = await CreateConnection(connectionName, cancellationToken).ConfigureAwait(false);
 
-            return _receiveConnection;
+            _connections[connectionName] = new ManagedConnection 
+            { 
+                Connection = connection,
+                LastUsed = _timeProvider.GetUtcNow()
+            };
+
+            return connection;
         }
         finally
         {
-            _receiveLock.Release();
+            _connectionLock.Release();
         }
     }
 
@@ -156,51 +156,57 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
     {
         if (_disposed) return;
 
-        await _senderLock.WaitAsync().ConfigureAwait(false);
-        await _receiveLock.WaitAsync().ConfigureAwait(false);
+        await _connectionLock.WaitAsync().ConfigureAwait(false);
 
         try
         {
-            if (_disposed) return;
-
-            if (_sendConnection is not null)
-            {
-                try
+            var connectionTasks = _connections
+                .Values
+                .Select(async managedConnection =>
                 {
-                    if (_sendConnection.IsOpen)
-                        await _sendConnection.CloseAsync().ConfigureAwait(false);
+                    var connectionName = managedConnection.ConnectionName;
+                    try
+                    {
+                        await managedConnection.DisposeAsync().ConfigureAwait(false);
+                        LogDisposedConnection(connectionName);
+                    }
+                    catch (Exception ex)
+                    {
 
-                    await _sendConnection.DisposeAsync().ConfigureAwait(false);
-                }
-                catch(Exception ex)
-                {
-                    LogErrorClosingConnection(ex, _senderConnectionName);
-                }
+                        LogErrorClosingConnection(ex, connectionName);
+                    }
+                });
 
-                _sendConnection = null;
-            }
+            await Task.WhenAll(connectionTasks).ConfigureAwait(false);
+            _connections.Clear();
 
-            if (_receiveConnection is not null)
-            {
-                try
-                {
-                    if (_receiveConnection.IsOpen)
-                        await _receiveConnection.CloseAsync().ConfigureAwait(false);
-
-                    await _receiveConnection.DisposeAsync().ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    LogErrorClosingConnection(ex, _receiverConnectionName);
-                }
-
-                _receiveConnection = null;
-            }
+            _disposed = true;
         }
         finally
         {
-            _senderLock.Release();
-            _receiveLock.Release();
+            _connectionLock.Release();
+        }
+    }
+
+    private sealed class ManagedConnection : IAsyncDisposable
+    {
+        private bool _disposed;
+
+        public required IConnection Connection { get; init; }
+        public required DateTimeOffset LastUsed { get; set; }
+        public bool IsHealthy => Connection.IsOpen;
+        public string ConnectionName => Connection.ClientProvidedName ?? "Unknown";
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_disposed)
+                return;
+
+            if (Connection.IsOpen)
+                await Connection.CloseAsync().ConfigureAwait(false);
+
+            await Connection.DisposeAsync().ConfigureAwait(false);
+
             _disposed = true;
         }
     }
@@ -216,4 +222,11 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
         level: LogLevel.Warning,
         message: "Error while disposing RabbitMQ connection '{ConnectionName}'")]
     partial void LogErrorClosingConnection(Exception ex, string connectionName);
+
+    [LoggerMessage(
+        eventId: 1002,
+        level: LogLevel.Debug,
+        message: "RabbitMQ connection '{ConnectionName}' disposed.")]
+    partial void LogDisposedConnection(string connectionName);
 }
+

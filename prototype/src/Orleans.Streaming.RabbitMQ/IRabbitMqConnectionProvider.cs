@@ -7,15 +7,16 @@ public interface IRabbitMqConnectionProvider : IAsyncDisposable
     /// <summary>
     /// Gets a new connection.
     /// </summary>
-    ValueTask<IConnection> GetConnection(string? clientName, CancellationToken cancellationToken = default);
+    /// <param name="connectionName">The name of the connection. If null, a default connection name will be used.</param>
+    ValueTask<IConnection> GetConnection(string? connectionName, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets the singleton connection for sending (async).
+    /// Gets the singleton connection for sending messages.
     /// </summary>
     ValueTask<IConnection> GetSendConnection(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets a new connection for receiving messages (async).
+    /// Gets the singleton connection for receiving messages.
     /// </summary>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
