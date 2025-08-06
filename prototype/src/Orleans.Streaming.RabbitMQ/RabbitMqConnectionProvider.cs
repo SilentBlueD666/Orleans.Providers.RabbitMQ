@@ -31,7 +31,7 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
     {
         _logger = loggerFactory.CreateLogger<RabbitMqConnectionProvider>();
 
-        var clientProvidedName = options.ConnectionName;
+        var clientProvidedName = options.ConnectionNamePrefix;
         if (clientProvidedName is { Length: > 0 })
         {
             _senderConnectionName = $"{clientProvidedName}-Sender";
@@ -50,7 +50,6 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
         {
             _factory = new ConnectionFactory
             {
-                Port = options.Port,
                 UserName = options.UserName,
                 Password = options.Password,
                 VirtualHost = options.VirtualHost,
@@ -58,8 +57,8 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
             };
 
             _endpoints = options
-                .HostNames
-                .Select(hostName => new AmqpTcpEndpoint(hostName))
+                .Endpoints
+                .Select(hostName => AmqpTcpEndpoint.Parse(hostName))
                 .ToList();
 
             _endpointsConfigured = true;

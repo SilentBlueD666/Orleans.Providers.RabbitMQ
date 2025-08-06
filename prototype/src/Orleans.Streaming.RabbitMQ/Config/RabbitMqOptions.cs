@@ -14,19 +14,29 @@ public sealed class RabbitMqOptions
     public string? ConnectionString { get; set; }
 
     /// <summary>
-    /// The client-provided name for the RabbitMQ connection.
+    /// A prefix for client-provided name for the RabbitMQ connection.
     /// </summary>
-    public string? ConnectionName { get; set; }
+    public string? ConnectionNamePrefix { get; set; }
 
+    /// <summary>
+    /// Used to specify endpoints for RabbitMQ connections, for example, for clustering and high availability.
+    /// </summary>
+    public ICollection<string> Endpoints { get; set; } = [];
 
-    public List<string> HostNames { get; set; } = [];
-
+    /// <summary>
+    /// RabbitMQ virtual host to use for the connection.
+    /// </summary>
     public string VirtualHost { get; set; } = DefaultOptionConstants.VirtualHost;
 
-    public int Port { get; set; } = DefaultOptionConstants.Port;
+    /// <summary>
+    /// RabbitMQ user name to use for the connection.
+    /// </summary>
     public string UserName { get; set; } = DefaultOptionConstants.UserName;
-    public string Password { get; set; } = DefaultOptionConstants.Password;
 
+    /// <summary>
+    /// RabbitMQ password to use for the connection.
+    /// </summary>
+    public string Password { get; set; } = DefaultOptionConstants.Password;
 
     /// <summary>
     /// Gets or sets the list of queue names to use for the stream provider.
@@ -42,12 +52,12 @@ public sealed class RabbitMqOptions
     /// Whether to declare the queue when the stream provider is initialized.
     /// </summary>
     public bool DeclareQueue { get; set; } = true;
-    
+
     /// <summary>
     /// Gets or sets the number of messages that the consumer can pre-fetch from the queue.
     /// </summary>
     public int PrefetchCount { get; set; } = DefaultOptionConstants.PrefetchCount;
-    
+
     /// <summary>
     /// Gets or sets a value indicating whether the operation is durable.
     /// </summary>
@@ -77,17 +87,24 @@ public sealed class RabbitMqOptions
     /// Optional; additional queue arguments, e.g. "x-queue-type", used when declaring the queue.
     /// </summary>
     /// <remarks>
-    /// <see cref="DeclareQueue"/> must be set to true for these arguments to be used.
+    /// <see cref="DeclareQueue"/> must be set to true for these arguments to take effect.
     /// </remarks>
     public IDictionary<string, object?>? QueueArguments = null;
 
     /// <summary>
-    /// Defines whether the stream provider should send messages as a batch or each event singularly.
+    /// Defines whether the stream provider should send messages as a batch or each event individually.
     /// </summary>
     public bool SendAsBatch { get; set; } = false;
 
-    internal bool UseConnectionString => !string.IsNullOrWhiteSpace(ConnectionString);
+    /// <summary>
+    /// Defines whether the stream provider should use a connection string or multiple endpoints for RabbitMQ clustering.
+    /// </summary>
+    internal bool UseConnectionString => !string.IsNullOrWhiteSpace(ConnectionString) && Endpoints.Count == 0;
 
+    /// <summary>
+    /// Configures the RabbitMQ connection using a connection string.
+    /// </summary>
+    /// <param name="connectionString">A valid formatted RabbitMQ connection string, e.g. amqp://guest:guest@localhost:5672/</param>
     public void ConfigureRabbitMqConnection(string connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -96,6 +113,13 @@ public sealed class RabbitMqOptions
         ConnectionString = connectionString;
     }
 
+    /// <summary>
+    /// Configures the RabbitMQ connection using individual parameters, that creates a connection string.
+    /// </summary>
+    /// <param name="hostname">The host name of the RabbitMQ server.</param>
+    /// <param name="virtualHost">The virtual host to use for the connection.</param>
+    /// <param name="userName">The user name for the RabbitMQ connection.</param>
+    /// <param name="password">The password for the RabbitMQ connection.</param>
     public void ConfigureRabbitMqConnection(string hostname, string virtualHost, string userName, string password)
     {
         if (string.IsNullOrWhiteSpace(hostname))
@@ -113,5 +137,32 @@ public sealed class RabbitMqOptions
         ConnectionString = $"amqp://{userName}:{password}@{hostname}/{virtualHost.TrimStart('/')}";
     }
 
+    /// <summary>
+    /// Configures the RabbitMQ connection using a collection of endpoints for RabbitMQ clustering.
+    /// </summary>
+    /// <param name="endpoints">A collection of RabbitMQ endpoints, e.g. ["host1:5672", "host2:5672", "host3"]</param>
+    /// <param name="virtualHost">The virtual host to use for the connection.</param>
+    /// <param name="userName">The user name for the RabbitMQ connection.</param>
+    /// <param name="password">The password for the RabbitMQ connection.</param>
+    public void ConfigureRabbitMqConnection(ICollection<string> endpoints, string virtualHost, string userName, string password)
+    {
+        if (Endpoints is null || Endpoints.Count == 0)
+            throw new ArgumentNullException(nameof(Endpoints));
 
+        if (string.IsNullOrWhiteSpace(virtualHost))
+            throw new ArgumentNullException(nameof(virtualHost));
+
+        if (string.IsNullOrWhiteSpace(userName))
+            throw new ArgumentNullException(nameof(userName));
+
+        if (string.IsNullOrWhiteSpace(password))
+            throw new ArgumentNullException(nameof(password));
+
+        Endpoints = endpoints;
+        VirtualHost = virtualHost;
+        UserName = userName;
+        Password = password;
+
+        ConnectionString = null; // Clear any existing connection string
+    }
 }

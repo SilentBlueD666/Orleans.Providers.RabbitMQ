@@ -25,7 +25,7 @@ builder.UseOrleansClient(client
                 options.ExchangeName = "orleans-test-exchange";
                 options.QueueNamePrefix = "orleans-test-queue";
                 options.DeclareQueue = true;
-                options.ConnectionName = "Orleans.Streaming.Client.RabbitMQ";
+                options.ConnectionNamePrefix = "Orleans.Streaming.Client.RabbitMQ";
             });
         }));
 

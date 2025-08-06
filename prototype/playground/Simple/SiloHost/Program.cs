@@ -22,7 +22,7 @@ builder.UseOrleans(siloBuilder
                 options.ExchangeName = "orleans-test-exchange";
                 options.QueueNamePrefix = "orleans-test-queue";
                 options.DeclareQueue = true;
-                options.ConnectionName = "Orleans.Streaming.Silo.RabbitMQ";
+                options.ConnectionNamePrefix = "Orleans.Streaming.Silo.RabbitMQ";
             });
         }));
 

@@ -2,21 +2,39 @@
 
 namespace Orleans.Configuration;
 
-public sealed class RabbitMqOptionsValidator(RabbitMqOptions options, string name) : IConfigurationValidator
+internal sealed class RabbitMqOptionsValidator(RabbitMqOptions options, string name) : IConfigurationValidator
 {
     private readonly RabbitMqOptions _options = options;
     private readonly string _name = name;
 
     public void ValidateConfiguration()
     {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-            throw new OrleansConfigurationException($"The {nameof(RabbitMqOptions.ConnectionString)} property of {_name} must be set.");
+        // Validate the connection opinion based on whether a connection string or endpoints are used.
+        if (_options.UseConnectionString)
+        {
+            if (string.IsNullOrWhiteSpace(_options.ConnectionString))
+                throw new OrleansConfigurationException($"The {nameof(RabbitMqOptions.ConnectionString)} property of {_name} must be set.");
 
-        if (!IsValidRabbitMqConnectionString(_options.ConnectionString))
-            throw new OrleansConfigurationException($"The {nameof(RabbitMqOptions.ConnectionString)} property of {_name} is not a valid RabbitMQ connection string.");
+            if (!IsValidRabbitMqConnectionString(_options.ConnectionString))
+                throw new OrleansConfigurationException($"The {nameof(RabbitMqOptions.ConnectionString)} property of {_name} is not a valid RabbitMQ connection string.");
+        }
+        else
+        {
+            if (_options.Endpoints is null || _options.Endpoints.Count == 0)
+                throw new OrleansConfigurationException($"The {nameof(RabbitMqOptions.Endpoints)} property of {_name} must be set with at least one endpoint.");
 
-        //if (_options.ExchangeName is { Length : 0})
-        //    throw new OrleansConfigurationException($"The {nameof(RabbitMqStreamOptions.ExchangeName)} property of {_name} must be set.");
+            if (_options.Endpoints.Any(endpoint => string.IsNullOrWhiteSpace(endpoint)))
+                throw new OrleansConfigurationException($"The {nameof(RabbitMqOptions.Endpoints)} property of {_name} contains one or more empty endpoint strings.");
+
+            if(string.IsNullOrWhiteSpace(_options.VirtualHost))
+                throw new OrleansConfigurationException($"The {nameof(RabbitMqOptions.VirtualHost)} property of {_name} must be set.");
+
+            if (string.IsNullOrWhiteSpace(_options.UserName))
+                throw new OrleansConfigurationException($"The {nameof(RabbitMqOptions.UserName)} property of {_name} must be set.");
+
+            if (string.IsNullOrWhiteSpace(_options.Password))
+                throw new OrleansConfigurationException($"The {nameof(RabbitMqOptions.Password)} property of {_name} must be set.");
+        }
 
         //TODO: Check queue names and prefix don't create a length that exceeds RabbitMQ limits.
 
