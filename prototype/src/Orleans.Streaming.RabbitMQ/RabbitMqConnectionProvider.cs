@@ -204,7 +204,7 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
 
         public IConnection Connection { get; }
         public DateTimeOffset LastUsed { get; set; }
-        public bool IsHealthy => Connection.IsOpen;
+        public bool IsHealthy => !_disposed && Connection.IsOpen;
         public string ConnectionName => Connection.ClientProvidedName ?? "Unknown";
 
         public async ValueTask DisposeAsync()
