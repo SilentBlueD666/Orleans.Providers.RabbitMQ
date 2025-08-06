@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Orleans.Configuration;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
 using System.Collections.Concurrent;
 using System.Threading;
 
@@ -14,6 +15,7 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
 
     private readonly RabbitMqOptions _options;
     private readonly TimeProvider _timeProvider;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<RabbitMqConnectionProvider> _logger;
 
     private readonly ConnectionFactory _factory;
@@ -66,6 +68,7 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
 
         _options = options;
         _timeProvider = timeProvider;
+        _loggerFactory = loggerFactory;
     }
 
     private async Task<IConnection> CreateConnection(string connectionName, CancellationToken cancellationToken)
@@ -137,11 +140,10 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
 
             var connection = await CreateConnection(connectionName, cancellationToken).ConfigureAwait(false);
 
-            _connections[connectionName] = new ManagedConnection 
-            { 
-                Connection = connection,
-                LastUsed = _timeProvider.GetUtcNow()
-            };
+            _connections[connectionName] = ManagedConnection.Create(
+                connection: connection,
+                timeProvider: _timeProvider,
+                loggerFactory: _loggerFactory);
 
             return connection;
         }
@@ -171,7 +173,6 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
                     }
                     catch (Exception ex)
                     {
-
                         LogErrorClosingConnection(ex, connectionName);
                     }
                 });
@@ -187,12 +188,22 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
         }
     }
 
-    private sealed class ManagedConnection : IAsyncDisposable
+    private sealed partial class ManagedConnection : IAsyncDisposable
     {
+        private readonly ILogger<ManagedConnection> _logger;
         private bool _disposed;
 
-        public required IConnection Connection { get; init; }
-        public required DateTimeOffset LastUsed { get; set; }
+        public ManagedConnection(IConnection connection, ILogger<ManagedConnection> logger)
+        {
+            _logger = logger;
+            Connection = connection;
+            Connection.ConnectionShutdownAsync += OnConnectionShutdown;
+            Connection.ConnectionBlockedAsync += OnConnectionBlocked;
+            Connection.ConnectionUnblockedAsync += OnConnectionUnblocked;
+        }
+
+        public IConnection Connection { get; }
+        public DateTimeOffset LastUsed { get; set; }
         public bool IsHealthy => Connection.IsOpen;
         public string ConnectionName => Connection.ClientProvidedName ?? "Unknown";
 
@@ -204,15 +215,80 @@ internal sealed partial class RabbitMqConnectionProvider : IRabbitMqConnectionPr
             if (Connection.IsOpen)
                 await Connection.CloseAsync().ConfigureAwait(false);
 
+            Connection.ConnectionShutdownAsync -= OnConnectionShutdown;
+            Connection.ConnectionBlockedAsync -= OnConnectionBlocked;
+            Connection.ConnectionUnblockedAsync -= OnConnectionUnblocked;
+
             await Connection.DisposeAsync().ConfigureAwait(false);
 
             _disposed = true;
         }
+
+        public static ManagedConnection Create(IConnection connection, TimeProvider timeProvider, ILoggerFactory loggerFactory)
+        {
+            ArgumentNullException.ThrowIfNull(connection);
+            ArgumentNullException.ThrowIfNull(timeProvider);
+            ArgumentNullException.ThrowIfNull(loggerFactory);
+
+            return new ManagedConnection(connection: connection, logger: loggerFactory.CreateLogger<ManagedConnection>())
+            {
+                LastUsed = timeProvider.GetUtcNow()
+            };
+        }
+
+        private Task OnConnectionShutdown(object sender, ShutdownEventArgs @event)
+        {
+            var reason = @event.ToString();
+
+            var exception = @event.Exception;
+            if (exception is null)
+                LogConnectionShutdown(ConnectionName, reason);
+            else
+                LogConnectionShutdownError(ConnectionName, reason, exception);
+
+            return Task.CompletedTask;
+        }
+
+        private Task OnConnectionBlocked(object sender, ConnectionBlockedEventArgs @event)
+        {
+            LogConnectionBlocked(ConnectionName, @event.Reason);
+            return Task.CompletedTask;
+        }
+
+        private Task OnConnectionUnblocked(object sender, AsyncEventArgs @event)
+        {
+            LogConnectionUnblocked(ConnectionName);
+            return Task.CompletedTask;
+        }
+
+        [LoggerMessage(
+            eventId: 1000,
+            level: LogLevel.Information,
+            message: "RabbitMQ connection '{ConnectionName}' shutdown: {Reason}")]
+        partial void LogConnectionShutdown(string connectionName, string reason);
+
+        [LoggerMessage(
+            eventId: 1001,
+            level: LogLevel.Error,
+            message: "RabbitMQ connection '{ConnectionName}' shutdown with error: {Reason}")]
+        partial void LogConnectionShutdownError(string connectionName, string reason, Exception ex);
+
+        [LoggerMessage(
+            eventId: 1002,
+            level: LogLevel.Warning,
+            message: "RabbitMQ connection '{ConnectionName}' blocked: {Reason}")]
+        partial void LogConnectionBlocked(string connectionName, string reason);
+
+        [LoggerMessage(
+            eventId: 1003,
+            level: LogLevel.Information,
+            message: "RabbitMQ connection '{ConnectionName}' unblocked.")]
+        partial void LogConnectionUnblocked(string connectionName);
     }
 
     [LoggerMessage(
         eventId: 1000,
-        level: LogLevel.Debug,
+        level: LogLevel.Information,
         message: "Started RabbitMQ connection '{ConnectionName}' {Endpoint}")]
     partial void LogStartedConnection(string connectionName, AmqpTcpEndpoint endpoint);
 
