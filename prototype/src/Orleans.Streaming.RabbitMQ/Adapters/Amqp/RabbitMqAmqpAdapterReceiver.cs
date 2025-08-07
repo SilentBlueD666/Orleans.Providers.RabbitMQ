@@ -105,6 +105,9 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
         var messages = new List<IBatchContainer>(messagesToConsume);
         for (int i = 0; i < messagesToConsume; i++)
         {
+            if (ReceiverShutdown == Interlocked.Exchange(ref _receiverState, ReceiverShutdown))
+                break;
+
             var result = await channel.BasicGetAsync(_queueName, autoAck: false);
             if (result is null)
             {
