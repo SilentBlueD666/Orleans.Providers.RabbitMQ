@@ -34,6 +34,8 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
     private long _messageAcknowledgedCount;
     private long _sequenceNumber = -1;
 
+    private bool _initialized;
+
     private RabbitMqAmqpAdapterReceiver(
         string providerName,
         string queueName,
@@ -67,9 +69,45 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
 
         try
         {
-            var cancellationToken = new CancellationTokenSource(timeout).Token;
+            using var cancellationTokenSource = new CancellationTokenSource(timeout);
+            var cancellationToken = cancellationTokenSource.Token;
 
-            await _consumerConnector.InitChannel(cancellationToken).ConfigureAwait(false);
+            if (_options is { QueueDeclaration: QueueDeclarationMode.OnDemand })
+            {
+                var exchangeName = _options.ExchangeName;
+                var autoDelete = _options.AutoDelete;
+                var durable = _options.Durable;
+
+                var channel = await _consumerConnector.GetChannel(cancellationToken).ConfigureAwait(false);
+                await channel
+                    .ExchangeDeclareAsync(
+                        exchange: exchangeName,
+                        type: _options.ExchangeType,
+                        durable: durable,
+                        autoDelete: autoDelete,
+                        cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+
+                await channel
+                        .QueueDeclareAsync(
+                            queue: _queueName,
+                            durable: durable,
+                            exclusive: false,
+                            autoDelete: autoDelete,
+                            arguments: _options.QueueArguments,
+                            cancellationToken: cancellationToken)
+                        .ConfigureAwait(false);
+
+                await channel
+                    .QueueBindAsync(
+                        queue: _queueName,
+                        exchange: exchangeName,
+                        routingKey: _queueName,
+                        cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            else
+                await _consumerConnector.InitChannel(cancellationToken).ConfigureAwait(false);
 
             LogInitializedReceiver(_providerName, _queueName);
         }
@@ -78,11 +116,13 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
             LogReceiverInitializationFailed(_providerName, _queueName, ex);
             throw;
         }
+
+        _initialized = true;
     }
 
     public async Task<IList<IBatchContainer>> GetQueueMessagesAsync(int maxCount)
     {
-        if (_receiverState == ReceiverShutdown)
+        if (!_initialized || _receiverState == ReceiverShutdown)
             return _emptyMessageBatch;
 
         var messages = await DequeueMessages(maxCount).ConfigureAwait(false);
@@ -105,7 +145,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
         var messages = new List<IBatchContainer>(messagesToConsume);
         for (int i = 0; i < messagesToConsume; i++)
         {
-            if (ReceiverShutdown == Interlocked.Exchange(ref _receiverState, ReceiverShutdown))
+            if (_receiverState == ReceiverShutdown)
                 break;
 
             var result = await channel.BasicGetAsync(_queueName, autoAck: false);

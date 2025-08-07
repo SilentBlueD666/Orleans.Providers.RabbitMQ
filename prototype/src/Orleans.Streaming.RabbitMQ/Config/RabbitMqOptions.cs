@@ -49,9 +49,9 @@ public sealed class RabbitMqOptions
     public string QueueNamePrefix { get; set; } = DefaultOptionConstants.QueueNamePrefix;
 
     /// <summary>
-    /// Whether to declare the queue when the stream provider is initialized.
+    /// Whether to declare the queue at start-up or when the first producer sends, consumer subscribes or not at all.
     /// </summary>
-    public bool DeclareQueue { get; set; } = true;
+    public QueueDeclarationMode QueueDeclaration { get; set; } = QueueDeclarationMode.AtStartup;
 
     /// <summary>
     /// Gets or sets the number of messages that the consumer can pre-fetch from the queue.

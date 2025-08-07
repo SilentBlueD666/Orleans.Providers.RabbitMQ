@@ -49,7 +49,7 @@ internal partial class RabbitMqAmqpAdapter(
 
     public async ValueTask InitializeAsync()
     {
-        if (!_options.DeclareQueue)
+        if (_options is not { QueueDeclaration: QueueDeclarationMode.AtStartup })
             return;
 
         var exchangeName = _options.ExchangeName;

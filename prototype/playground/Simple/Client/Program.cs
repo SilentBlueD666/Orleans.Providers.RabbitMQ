@@ -1,5 +1,6 @@
 ﻿using Common;
 using GrainInterfaces;
+using Orleans.Configuration;
 using Orleans.Streams;
 
 const int maxAttempts = 5;
@@ -24,7 +25,6 @@ builder.UseOrleansClient(client
                 options.ConnectionString = "amqp://guest:guest@localhost:5672/";
                 options.ExchangeName = "orleans-test-exchange";
                 options.QueueNamePrefix = "orleans-test-queue";
-                options.DeclareQueue = true;
                 options.ConnectionNamePrefix = "Orleans.Streaming.Client.RabbitMQ";
             });
         }));

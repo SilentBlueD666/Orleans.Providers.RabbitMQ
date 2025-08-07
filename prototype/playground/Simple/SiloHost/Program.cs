@@ -1,6 +1,7 @@
 ﻿using Common;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Orleans.Configuration;
 using Orleans.Hosting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -21,7 +22,6 @@ builder.UseOrleans(siloBuilder
                 options.ConnectionString = "amqp://guest:guest@localhost:5672/";
                 options.ExchangeName = "orleans-test-exchange";
                 options.QueueNamePrefix = "orleans-test-queue";
-                options.DeclareQueue = true;
                 options.ConnectionNamePrefix = "Orleans.Streaming.Silo.RabbitMQ";
             });
         }));

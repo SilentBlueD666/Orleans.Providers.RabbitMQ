@@ -5,6 +5,7 @@ using Orleans.Runtime;
 using Orleans.Streams;
 using RabbitMQ.Client;
 using System.Data.Common;
+using System.Threading;
 using System.Threading.Channels;
 using System.Xml.Linq;
 
@@ -28,9 +29,53 @@ internal sealed partial class RabbitMqAmqpProducer(
     private readonly IRabbitMqDataAdapter _dataAdapter = dataAdapter;
     private readonly TimeProvider _timeProvider = timeProvider;
     private readonly ILogger<RabbitMqAmqpProducer> _logger = loggerFactory.CreateLogger<RabbitMqAmqpProducer>();
+    private readonly SemaphoreSlim _publishLock = new(1, 1);
 
-    private SemaphoreSlim _publishLock = new(1, 1);
     private bool _disposed;
+    private bool _initialized;
+
+    public async ValueTask Initialize()
+    {
+        if (_initialized)
+            return;
+
+        if (_options is not { QueueDeclaration: QueueDeclarationMode.OnDemand })
+        {
+            _initialized = true;
+            return;
+        }
+
+        var exchangeName = _options.ExchangeName;
+        var autoDelete = _options.AutoDelete;
+        var durable = _options.Durable;
+
+        var channel = await _producerConnector.GetChannel().ConfigureAwait(false);
+        await channel
+            .ExchangeDeclareAsync(
+                exchange: exchangeName,
+                type: _options.ExchangeType,
+                durable: durable,
+                autoDelete: autoDelete)
+            .ConfigureAwait(false);
+
+        await channel
+            .QueueDeclareAsync(
+                queue: _queueName,
+                durable: durable,
+                exclusive: false,
+                autoDelete: autoDelete,
+                arguments: _options.QueueArguments)
+            .ConfigureAwait(false);
+
+        await channel
+            .QueueBindAsync(
+                queue: _queueName,
+                exchange: exchangeName,
+                routingKey: _queueName)
+            .ConfigureAwait(false);
+
+        _initialized = true;
+    }
 
     public async ValueTask SendMessage<T>(StreamId streamId, T @event, Dictionary<string, object> requestContext)
         => await SendMessage(streamId, [@event], requestContext).ConfigureAwait(false);
@@ -39,6 +84,9 @@ internal sealed partial class RabbitMqAmqpProducer(
     {
         if (_disposed)
             throw new ObjectDisposedException(nameof(RabbitMqAmqpProducer));
+
+        if (!_initialized)
+            await Initialize().ConfigureAwait(false);
 
         var timestamp = _timeProvider.GetUtcNow();
 
