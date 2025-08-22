@@ -52,40 +52,15 @@ internal partial class RabbitMqAmqpAdapter(
         if (_options is not { QueueDeclaration: QueueDeclarationMode.AtStartup })
             return;
 
-        var exchangeName = _options.ExchangeName;
-        var autoDelete = _options.AutoDelete;
-        var durable = _options.Durable;
-
         await using var connector = _connectorFactory.CreateConnector($"{Name}_Declarer");
         var channel = await connector.GetChannel().ConfigureAwait(false);
-        await channel
-            .ExchangeDeclareAsync(
-                exchange: exchangeName,
-                type: _options.ExchangeType,
-                durable: durable,
-                autoDelete: autoDelete)
-            .ConfigureAwait(false);
+        await channel.ExchangeDeclareAsync(_options).ConfigureAwait(false);
 
         var queues = _queueProvider.GetAllQueues();
         foreach (var queueId in queues)
         {
             var queueName = queueId.ToString();
-
-            await channel
-                .QueueDeclareAsync(
-                    queue: queueName,
-                    durable: durable,
-                    exclusive: false,
-                    autoDelete: autoDelete,
-                    arguments: _options.QueueArguments)
-                .ConfigureAwait(false);
-
-            await channel
-                .QueueBindAsync(
-                    queue: queueName,
-                    exchange: exchangeName,
-                    routingKey: queueName)
-                .ConfigureAwait(false);
+            await channel.QueueDeclareAsync(queueName, _options).ConfigureAwait(false);
         }
     }
 

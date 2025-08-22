@@ -39,41 +39,13 @@ internal sealed partial class RabbitMqAmqpProducer(
         if (_initialized)
             return;
 
-        if (_options is not { QueueDeclaration: QueueDeclarationMode.OnDemand })
+        if (_options is { QueueDeclaration: QueueDeclarationMode.OnDemand })
         {
-            await _producerConnector.InitChannel().ConfigureAwait(false);
-            _initialized = true;
-            return;
+            var channel = await _producerConnector.GetChannel().ConfigureAwait(false);
+            await channel.ExchangeAndQueueDeclareAsync(_queueName, _options).ConfigureAwait(false);
         }
-
-        var exchangeName = _options.ExchangeName;
-        var autoDelete = _options.AutoDelete;
-        var durable = _options.Durable;
-
-        var channel = await _producerConnector.GetChannel().ConfigureAwait(false);
-        await channel
-            .ExchangeDeclareAsync(
-                exchange: exchangeName,
-                type: _options.ExchangeType,
-                durable: durable,
-                autoDelete: autoDelete)
-            .ConfigureAwait(false);
-
-        await channel
-            .QueueDeclareAsync(
-                queue: _queueName,
-                durable: durable,
-                exclusive: false,
-                autoDelete: autoDelete,
-                arguments: _options.QueueArguments)
-            .ConfigureAwait(false);
-
-        await channel
-            .QueueBindAsync(
-                queue: _queueName,
-                exchange: exchangeName,
-                routingKey: _queueName)
-            .ConfigureAwait(false);
+        else
+            await _producerConnector.InitChannel().ConfigureAwait(false);
 
         _initialized = true;
     }
@@ -148,6 +120,8 @@ internal sealed partial class RabbitMqAmqpProducer(
         TimeProvider timeProvider,
         ILoggerFactory loggerFactory)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerName);
+
         return new RabbitMqAmqpProducer(
             providerName: providerName,
             queueName: queueId.ToString(),

@@ -74,37 +74,8 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
 
             if (_options is { QueueDeclaration: QueueDeclarationMode.OnDemand })
             {
-                var exchangeName = _options.ExchangeName;
-                var autoDelete = _options.AutoDelete;
-                var durable = _options.Durable;
-
                 var channel = await _consumerConnector.GetChannel(cancellationToken).ConfigureAwait(false);
-                await channel
-                    .ExchangeDeclareAsync(
-                        exchange: exchangeName,
-                        type: _options.ExchangeType,
-                        durable: durable,
-                        autoDelete: autoDelete,
-                        cancellationToken: cancellationToken)
-                    .ConfigureAwait(false);
-
-                await channel
-                        .QueueDeclareAsync(
-                            queue: _queueName,
-                            durable: durable,
-                            exclusive: false,
-                            autoDelete: autoDelete,
-                            arguments: _options.QueueArguments,
-                            cancellationToken: cancellationToken)
-                        .ConfigureAwait(false);
-
-                await channel
-                    .QueueBindAsync(
-                        queue: _queueName,
-                        exchange: exchangeName,
-                        routingKey: _queueName,
-                        cancellationToken: cancellationToken)
-                    .ConfigureAwait(false);
+                await channel.ExchangeAndQueueDeclareAsync(_queueName, _options, cancellationToken).ConfigureAwait(false);
             }
             else
                 await _consumerConnector.InitChannel(cancellationToken).ConfigureAwait(false);
@@ -202,7 +173,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
             {
                 if (_pendingDeliveries.TryRemove(message.SequenceToken, out var pendingDelivery))
                 {
-                    await channel.BasicAckAsync(pendingDelivery.DeliveryTag, multiple: false).ConfigureAwait(false);
+                    await channel.BasicAckAsync(pendingDelivery.DeliveryTag).ConfigureAwait(false);
                     acknowledgedCount++;
                 }
             }
