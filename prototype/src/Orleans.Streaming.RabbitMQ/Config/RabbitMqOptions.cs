@@ -1,4 +1,5 @@
-﻿using RabbitMQ.Client;
+﻿using Orleans.Streams;
+using RabbitMQ.Client;
 using DefaultOptionConstants = Orleans.Streaming.RabbitMQ.Config.DefaultOptionConstants;
 
 namespace Orleans.Configuration;
@@ -8,6 +9,11 @@ namespace Orleans.Configuration;
 /// </summary>
 public sealed class RabbitMqOptions
 {
+    /// <summary>
+    /// The configuration section name for RabbitMQ stream provider options.
+    /// </summary>
+    public const string SectionName = "Orleans:Streaming:RabbitMQ";
+
     /// <summary>
     /// The connection string for RabbitMQ.
     /// </summary>
@@ -39,6 +45,11 @@ public sealed class RabbitMqOptions
     public string Password { get; set; } = DefaultOptionConstants.Password;
 
     /// <summary>
+    /// Gets or sets the number of queues to be used in the system.
+    /// </summary>
+    public int NumberOfQueues { get; set; } = DefaultOptionConstants.QueueCount;
+
+    /// <summary>
     /// Gets or sets the list of queue names to use for the stream provider.
     /// </summary>
     public List<string> QueueNames { get; set; } = [];
@@ -59,9 +70,9 @@ public sealed class RabbitMqOptions
     public int PrefetchCount { get; set; } = DefaultOptionConstants.PrefetchCount;
 
     /// <summary>
-    /// Gets or sets a value indicating whether the operation is durable.
+    /// Gets or sets a value indicating whether the queue is durable.
     /// </summary>
-    public bool Durable { get; set; } = DefaultOptionConstants.Durable;
+    public bool QueueDurable { get; set; } = DefaultOptionConstants.Durable;
 
     /// <summary>
     /// If true, the queue will be automatically deleted when the last consumer unsubscribes.
@@ -79,9 +90,14 @@ public sealed class RabbitMqOptions
     public string ExchangeType { get; set; } = DefaultOptionConstants.ExchangeType;
 
     /// <summary>
-    /// Maximum number of messages that the receiver can handle at once.
+    /// Gets or sets a value indicating whether the exchange is durable.
     /// </summary>
-    public int MaxConsumerMessages { get; set; } = 5_000;
+    public bool ExchangeDurable { get; set; } = DefaultOptionConstants.Durable;
+
+    /// <summary>
+    /// Maximum number of messages that a receiver can handle at once.
+    /// </summary>
+    public int MaxConsumerMessages { get; set; } = DefaultOptionConstants.MaxConsumerMessages;
 
     /// <summary>
     /// Optional; additional queue arguments, e.g. "x-queue-type", used when declaring the queue.
@@ -95,6 +111,13 @@ public sealed class RabbitMqOptions
     /// Defines whether the stream provider should send messages as a batch or each event individually.
     /// </summary>
     public bool SendAsBatch { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets the mode of the stream provider, indicating the direction of data flow.
+    /// </summary>
+    /// <remarks>The mode determines whether the stream provider allows reading, writing, or both. Ensure that
+    /// the mode is set appropriately before performing any operations to avoid unexpected behaviour.</remarks>
+    public StreamProviderDirection Mode { get; set; } = StreamProviderDirection.ReadWrite;
 
     /// <summary>
     /// Defines whether the stream provider should use a connection string or multiple endpoints for RabbitMQ clustering.

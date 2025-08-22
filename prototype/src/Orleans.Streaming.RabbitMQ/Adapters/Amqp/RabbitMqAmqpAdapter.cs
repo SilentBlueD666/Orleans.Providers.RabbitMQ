@@ -45,7 +45,7 @@ internal partial class RabbitMqAmqpAdapter(
 
     public bool IsRewindable => false; // RabbitMQ AMQP Queues do not support rewind.
 
-    public StreamProviderDirection Direction => StreamProviderDirection.ReadWrite;
+    public StreamProviderDirection Direction => _options.Mode;
 
     public async ValueTask InitializeAsync()
     {

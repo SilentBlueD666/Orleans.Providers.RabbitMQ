@@ -39,11 +39,6 @@ public static class SiloRabbitMqStreamConfiguratorExtensions
     {
         configurator.Configure<SimpleQueueCacheOptions>(ob => ob.Configure(options => options.CacheSize = cacheSize));
     }
-
-    public static void ConfigurePartitioning(this ISiloRabbitMqStreamConfigurator configurator, int partitionCount = HashRingStreamQueueMapperOptions.DEFAULT_NUM_QUEUES)
-    {
-        configurator.Configure<HashRingStreamQueueMapperOptions>(ob => ob.Configure(options => options.TotalQueueCount = partitionCount));
-    }
 }
 
 public sealed class SiloRabbitMqStreamConfigurator : SiloPersistentStreamConfigurator, ISiloRabbitMqStreamConfigurator

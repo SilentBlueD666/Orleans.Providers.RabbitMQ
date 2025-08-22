@@ -31,7 +31,7 @@ internal static class RabbitMqChannelExtensions
             .ExchangeDeclareAsync(
                 exchange: options.ExchangeName,
                 type: options.ExchangeType,
-                durable: options.Durable,
+                durable: options.ExchangeDurable,
                 autoDelete: options.AutoDelete,
                 cancellationToken: cancellationToken)
             .ConfigureAwait(false);
@@ -53,7 +53,7 @@ internal static class RabbitMqChannelExtensions
         await channel
             .QueueDeclareAsync(
                 queue: queueName,
-                durable: options.Durable,
+                durable: options.QueueDurable,
                 exclusive: false,
                 autoDelete: options.AutoDelete,
                 arguments: options.QueueArguments,

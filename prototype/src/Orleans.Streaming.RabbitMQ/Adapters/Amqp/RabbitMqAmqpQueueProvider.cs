@@ -34,15 +34,18 @@ internal sealed class RabbitMqAmqpQueueProvider : IRabbitMqQueueProvider
     public IStreamQueueMapper GetStreamQueueMapper() 
         => _streamQueueMapper;
 
-    public static IRabbitMqQueueProvider Create(
-        string providerName, 
-        RabbitMqOptions options, 
-        HashRingStreamQueueMapperOptions hashRingStreamQueueOptions)
+    public static IRabbitMqQueueProvider Create(string providerName, RabbitMqOptions options)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerName);
+        ArgumentNullException.ThrowIfNull(options);
+
         var queueNamePrefix = string.IsNullOrWhiteSpace(options.QueueNamePrefix) ? providerName : options.QueueNamePrefix;
         var streamQueueMapper = options.QueueNames is null or { Count: 0 }
             ? new HashRingBasedStreamQueueMapper(
-                options: hashRingStreamQueueOptions,
+                options: new HashRingStreamQueueMapperOptions()
+                {
+                    TotalQueueCount = options.NumberOfQueues
+                },
                 queueNamePrefix: queueNamePrefix)
             : new HashRingBasedPartitionedStreamQueueMapper(
                 partitionIds: options.QueueNames,

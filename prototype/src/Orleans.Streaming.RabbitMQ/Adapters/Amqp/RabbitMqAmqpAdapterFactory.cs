@@ -18,7 +18,6 @@ internal sealed class RabbitMqAmqpAdapterFactory(
     IRabbitMqConnectorFactory connectorFactory,
     RabbitMqOptions options,
     SimpleQueueCacheOptions cacheOptions,
-    HashRingStreamQueueMapperOptions hashRingStreamQueueOptions,
     IRabbitMqDataAdapter dataAdapter,
     TimeProvider timeProvider,
     ILoggerFactory loggerFactory)
@@ -27,14 +26,14 @@ internal sealed class RabbitMqAmqpAdapterFactory(
 {
 
     private readonly TimeProvider _timeProvider = timeProvider;
-    private readonly IRabbitMqQueueProvider _queueProvider = RabbitMqAmqpQueueProvider.Create(providerName, options, hashRingStreamQueueOptions);
+    private readonly IRabbitMqQueueProvider _queueProvider = RabbitMqAmqpQueueProvider.Create(providerName, options);
     private readonly SimpleQueueAdapterCache _adapterCache = new(cacheOptions, providerName, loggerFactory);
 
     public Func<QueueId, Task<IStreamFailureHandler>>? StreamFailureHandlerFactory { private get; set; }
 
     public void Initialize()
     {
-        StreamFailureHandlerFactory = StreamFailureHandlerFactory 
+        StreamFailureHandlerFactory = StreamFailureHandlerFactory
             ?? (_ => Task.FromResult<IStreamFailureHandler>(new NoOpStreamDeliveryFailureHandler()));
     }
 
@@ -55,7 +54,7 @@ internal sealed class RabbitMqAmqpAdapterFactory(
     }
 
     public Task<IStreamFailureHandler> GetDeliveryFailureHandler(QueueId queueId)
-        => StreamFailureHandlerFactory?.Invoke(queueId) 
+        => StreamFailureHandlerFactory?.Invoke(queueId)
             ?? throw new InvalidOperationException("StreamFailureHandlerFactory is not set. Please set it before calling GetDeliveryFailureHandler.");
 
     public IQueueAdapterCache GetQueueAdapterCache()
@@ -71,9 +70,6 @@ internal sealed class RabbitMqAmqpAdapterFactory(
 
         var connectionProvider = serviceProvider.GetRequiredKeyedService<IRabbitMqConnectionProvider>(providerName);
 
-        var hashRingStreamQueueMapperOptions = serviceProvider.GetOptionsByName<HashRingStreamQueueMapperOptions>(providerName)
-            ?? new HashRingStreamQueueMapperOptions();
-
         var connectorFactory = serviceProvider.GetKeyedService<IRabbitMqConnectorFactory>(providerName)
             ?? new RabbitMqConnectorFactory(
                 connectionProvider,
@@ -85,8 +81,7 @@ internal sealed class RabbitMqAmqpAdapterFactory(
             providerName,
             connectorFactory,
             rabbitMqOptions,
-            cacheOptions,
-            hashRingStreamQueueMapperOptions);
+            cacheOptions);
 
         factory.Initialize();
 
