@@ -41,6 +41,7 @@ internal sealed partial class RabbitMqAmqpProducer(
 
         if (_options is not { QueueDeclaration: QueueDeclarationMode.OnDemand })
         {
+            await _producerConnector.InitChannel().ConfigureAwait(false);
             _initialized = true;
             return;
         }
