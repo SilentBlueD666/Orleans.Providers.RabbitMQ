@@ -102,8 +102,14 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
             ? Math.Min(maxCount, maxConsumerMessages)
             : maxCount;
 
+        const int initialBufferSize = 32;
+        var buffer = messagesToConsume <= initialBufferSize
+            ? new IBatchContainer[messagesToConsume]
+            : new IBatchContainer[initialBufferSize];
+
         var channel = await _consumerConnector.GetChannel().ConfigureAwait(false);
-        var messages = new List<IBatchContainer>(messagesToConsume);
+        int count = 0;
+
         for (int i = 0; i < messagesToConsume; i++)
         {
             if (_receiverState == ReceiverShutdown)
@@ -112,7 +118,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
             var result = await channel.BasicGetAsync(_queueName, autoAck: false);
             if (result is null)
             {
-                LogNoMoreMessagesInQueue(_queueName, messages.Count, _providerName);
+                LogNoMoreMessagesInQueue(_queueName, count, _providerName);
                 break;
             }
 
@@ -121,15 +127,18 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
             {
                 //TODO: Should we be using our own sequence number or use delivery tag '(long)result.DeliveryTag' from RabbitMQ? https://www.rabbitmq.com/docs/confirms#consumer-acks-delivery-tags
                 var sequenceId = Interlocked.Add(ref _sequenceNumber, 1);
-                var message = _dataAdapter.FromQueueMessage(queueMessage: result.Body, sequenceId: sequenceId);
-                if (message is not null)
+                var batchContainer = _dataAdapter.FromQueueMessage(queueMessage: result.Body, sequenceId: sequenceId);
+                if (batchContainer is not null)
                 {
                     var delivery = new PendingDelivery(result.DeliveryTag);
-                    _pendingDeliveries.TryAdd(message.SequenceToken, delivery);
+                    _pendingDeliveries.TryAdd(batchContainer.SequenceToken, delivery);
 
-                    messages.Add(message);
+                    if (count >= buffer.Length)
+                        Array.Resize(ref buffer, Math.Min(buffer.Length * 2, messagesToConsume));
 
-                    LogRetrievedMessage(_queueName, message.StreamId, _providerName, message.SequenceToken);
+                    buffer[count++] = batchContainer;
+
+                    LogRetrievedMessage(_queueName, batchContainer.StreamId, _providerName, batchContainer.SequenceToken);
                 }
                 else
                 {
@@ -144,11 +153,15 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
             }
         }
 
-        var messagesConsumedCount = messages.Count;
-        if (messagesConsumedCount > 0)
-            Interlocked.Add(ref _messagesConsumedCount, messagesConsumedCount);
+        if (count > 0)
+            Interlocked.Add(ref _messagesConsumedCount, count);
 
-        return messages;
+        return count switch
+        {
+            0 => _emptyMessageBatch,
+            _ when count == buffer.Length => buffer,
+            _ => buffer[..count]
+        };
     }
 
     public async Task MessagesDeliveredAsync(IList<IBatchContainer> messages)
@@ -212,8 +225,8 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
                 if (_pendingDeliveries.TryRemove(delivery.Key, out var pendingDelivery))
                     await channel
                         .BasicRejectAsync(
-                            pendingDelivery.DeliveryTag, 
-                            requeue: true, 
+                            pendingDelivery.DeliveryTag,
+                            requeue: true,
                             cancellationToken: cancellationToken)
                         .ConfigureAwait(false);
             }
