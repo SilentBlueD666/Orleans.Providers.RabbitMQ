@@ -18,7 +18,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
 {
     private const int ReceiverShutdown = 0;
     private const int ReceiverRunning = 1;
-    private static readonly IList<IBatchContainer> _emptyMessageBatch = [];
+    private static readonly IBatchContainer[] _emptyMessageBatch = Array.Empty<IBatchContainer>();
 
     private readonly string _providerName;
     private readonly string _queueName;
@@ -49,6 +49,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
 
         if (loggerFactory is null)
             throw new ArgumentNullException(nameof(loggerFactory));
+
         _providerName = providerName;
         _queueName = queueName;
         _consumerConnector = connectorFactory.CreateConsumerConnector();
@@ -196,21 +197,37 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
         if (ReceiverShutdown == Interlocked.Exchange(ref _receiverState, ReceiverShutdown))
             return;
 
-        using var cancellationTokenSource = new CancellationTokenSource(timeout);
-
-        var pendingDeliveries = _pendingDeliveries
-            .Select(pd => new { SequenceToken = pd.Key, pd.Value.DeliveryTag })
-            .OrderBy(pd => pd.DeliveryTag)
-            .ToList();
-
-        if (pendingDeliveries.Count > 0)
+        if (_pendingDeliveries.IsEmpty)
         {
-            var channel = await _consumerConnector.GetChannel(cancellationTokenSource.Token).ConfigureAwait(false);
-            foreach (var pd in pendingDeliveries)
+            await _consumerConnector.DisposeAsync().ConfigureAwait(false);
+            return;
+        }
+
+        using var cancellationTokenSource = new CancellationTokenSource(timeout);
+        var cancellationToken = cancellationTokenSource.Token;
+
+        var deliveries = _pendingDeliveries.ToArray();
+
+        try
+        {
+            var channel = await _consumerConnector.GetChannel(cancellationToken).ConfigureAwait(false);
+            foreach (var delivery in deliveries)
             {
-                if (_pendingDeliveries.TryRemove(pd.SequenceToken, out var pendingDelivery))
-                    await channel.BasicRejectAsync(pendingDelivery.DeliveryTag, requeue: true).ConfigureAwait(false);
+                if (cancellationToken.IsCancellationRequested)
+                    break;
+
+                if (_pendingDeliveries.TryRemove(delivery.Key, out var pendingDelivery))
+                    await channel
+                        .BasicRejectAsync(
+                            pendingDelivery.DeliveryTag, 
+                            requeue: true, 
+                            cancellationToken: cancellationToken)
+                        .ConfigureAwait(false);
             }
+        }
+        catch (Exception ex)
+        {
+            LogErrorRejectingMessages(_providerName, _queueName, ex);
         }
 
         await _consumerConnector.DisposeAsync().ConfigureAwait(false);
@@ -290,4 +307,10 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
         Level = LogLevel.Error,
         Message = "Provider {ProviderName} error acknowledging messages from queue '{QueueName}'")]
     partial void LogErrorAcknowledgingMessages(string providerName, string queueName, Exception exception);
+
+    [LoggerMessage(
+        EventId = 1010,
+        Level = LogLevel.Error,
+        Message = "Provider {ProviderName} error rejecting messages from queue '{QueueName}'")]
+    partial void LogErrorRejectingMessages(string providerName, string queueName, Exception exception);
 }
