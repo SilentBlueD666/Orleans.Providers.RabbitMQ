@@ -26,7 +26,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
     private readonly RabbitMqOptions _options;
     private readonly IRabbitMqDataAdapter _dataAdapter;
     private readonly ILogger _logger;
-    private readonly ConcurrentDictionary<StreamSequenceToken, PendingDelivery> _pendingDeliveries = [];
+    private readonly ConcurrentDictionary<StreamSequenceToken, ulong> _pendingDeliveries = [];
 
     private int _receiverState = ReceiverShutdown;
     private long _messagesConsumedCount;
@@ -130,13 +130,11 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
                 var batchContainer = _dataAdapter.FromQueueMessage(queueMessage: result.Body, sequenceId: sequenceId);
                 if (batchContainer is not null)
                 {
-                    var delivery = new PendingDelivery(result.DeliveryTag);
-                    _pendingDeliveries.TryAdd(batchContainer.SequenceToken, delivery);
-
                     if (count >= buffer.Length)
                         Array.Resize(ref buffer, Math.Min(buffer.Length * 2, messagesToConsume));
 
                     buffer[count++] = batchContainer;
+                    _pendingDeliveries.TryAdd(batchContainer.SequenceToken, result.DeliveryTag);
 
                     LogRetrievedMessage(_queueName, batchContainer.StreamId, _providerName, batchContainer.SequenceToken);
                 }
@@ -178,9 +176,9 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
             int acknowledgedCount = 0;
             foreach (var message in messages)
             {
-                if (_pendingDeliveries.TryRemove(message.SequenceToken, out var pendingDelivery))
+                if (_pendingDeliveries.TryRemove(message.SequenceToken, out ulong deliveryTag))
                 {
-                    await channel.BasicAckAsync(pendingDelivery.DeliveryTag).ConfigureAwait(false);
+                    await channel.BasicAckAsync(deliveryTag).ConfigureAwait(false);
                     acknowledgedCount++;
                 }
             }
@@ -222,10 +220,10 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
                 if (cancellationToken.IsCancellationRequested)
                     break;
 
-                if (_pendingDeliveries.TryRemove(delivery.Key, out var pendingDelivery))
+                if (_pendingDeliveries.TryRemove(delivery.Key, out ulong deliveryTag))
                     await channel
                         .BasicRejectAsync(
-                            pendingDelivery.DeliveryTag,
+                            deliveryTag: deliveryTag,
                             requeue: true,
                             cancellationToken: cancellationToken)
                         .ConfigureAwait(false);
