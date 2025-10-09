@@ -97,17 +97,6 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
         if (!_initialized || _receiverState == ReceiverShutdown)
             return _emptyMessageBatch;
 
-        var messages = await DequeueMessages(maxCount).ConfigureAwait(false);
-
-        var messagesConsumedCount = messages.Count;
-        if (messagesConsumedCount > 0)
-            Interlocked.Add(ref _messagesConsumedCount, messagesConsumedCount);
-
-        return messages;
-    }
-
-    private async Task<List<IBatchContainer>> DequeueMessages(int maxCount)
-    {
         var maxConsumerMessages = _options.MaxConsumerMessages;
         var messagesToConsume = maxConsumerMessages > 0
             ? Math.Min(maxCount, maxConsumerMessages)
@@ -154,6 +143,10 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
                 await channel.BasicRejectAsync(result.DeliveryTag, requeue: false).ConfigureAwait(false);
             }
         }
+
+        var messagesConsumedCount = messages.Count;
+        if (messagesConsumedCount > 0)
+            Interlocked.Add(ref _messagesConsumedCount, messagesConsumedCount);
 
         return messages;
     }
