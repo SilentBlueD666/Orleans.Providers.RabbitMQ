@@ -21,12 +21,13 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
     private static readonly IBatchContainer[] _emptyMessageBatch = Array.Empty<IBatchContainer>();
 
     private readonly string _providerName;
+    private readonly QueueId _queueId;
     private readonly string _queueName;
     private readonly IRabbitMqConnector _consumerConnector;
     private readonly RabbitMqOptions _options;
     private readonly IRabbitMqDataAdapter _dataAdapter;
+    private readonly IPendingDeliveryTracker _pendingDeliveryTracker;
     private readonly ILogger _logger;
-    private readonly ConcurrentDictionary<StreamSequenceToken, ulong> _pendingDeliveries = [];
 
     private int _receiverState = ReceiverShutdown;
     private long _messagesConsumedCount;
@@ -38,10 +39,12 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
 
     private RabbitMqAmqpAdapterReceiver(
         string providerName,
+        QueueId queueId,
         string queueName,
         IRabbitMqConnectorFactory connectorFactory,
         RabbitMqOptions options,
         IRabbitMqDataAdapter dataAdapter,
+        IPendingDeliveryTracker pendingDeliveryTracker,
         ILoggerFactory loggerFactory)
     {
         if (string.IsNullOrEmpty(queueName))
@@ -51,10 +54,12 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
             throw new ArgumentNullException(nameof(loggerFactory));
 
         _providerName = providerName;
+        _queueId = queueId;
         _queueName = queueName;
         _consumerConnector = connectorFactory.CreateConsumerConnector();
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _dataAdapter = dataAdapter ?? throw new ArgumentNullException(nameof(dataAdapter));
+        _pendingDeliveryTracker = pendingDeliveryTracker;
         _logger = loggerFactory.CreateLogger<RabbitMqAmqpAdapterReceiver>();
     }
 
@@ -134,7 +139,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
                         Array.Resize(ref buffer, Math.Min(buffer.Length * 2, messagesToConsume));
 
                     buffer[count++] = batchContainer;
-                    _pendingDeliveries.TryAdd(batchContainer.SequenceToken, result.DeliveryTag);
+                    _pendingDeliveryTracker.AddPendingDelivery(_queueId, batchContainer.SequenceToken, result.DeliveryTag);
 
                     LogRetrievedMessage(_queueName, batchContainer.StreamId, _providerName, batchContainer.SequenceToken);
                 }
@@ -176,7 +181,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
             int acknowledgedCount = 0;
             foreach (var message in messages)
             {
-                if (_pendingDeliveries.TryRemove(message.SequenceToken, out ulong deliveryTag))
+                if (_pendingDeliveryTracker.TryRemovePendingDelivery(_queueId, message.SequenceToken, out ulong deliveryTag))
                 {
                     await channel.BasicAckAsync(deliveryTag).ConfigureAwait(false);
                     acknowledgedCount++;
@@ -201,7 +206,8 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
         if (ReceiverShutdown == Interlocked.Exchange(ref _receiverState, ReceiverShutdown))
             return;
 
-        if (_pendingDeliveries.IsEmpty)
+        var pendingDeliveries = _pendingDeliveryTracker.FindPendingDeliveries(_queueId);
+        if (pendingDeliveries.IsEmpty)
         {
             await _consumerConnector.DisposeAsync().ConfigureAwait(false);
             return;
@@ -209,8 +215,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
 
         using var cancellationTokenSource = new CancellationTokenSource(timeout);
         var cancellationToken = cancellationTokenSource.Token;
-
-        var deliveries = _pendingDeliveries.ToArray();
+        var deliveries = pendingDeliveries.ToArray();
 
         try
         {
@@ -220,7 +225,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
                 if (cancellationToken.IsCancellationRequested)
                     break;
 
-                if (_pendingDeliveries.TryRemove(delivery.Key, out ulong deliveryTag))
+                if (_pendingDeliveryTracker.TryRemovePendingDelivery(_queueId, delivery.Key, out ulong deliveryTag))
                     await channel
                         .BasicRejectAsync(
                             deliveryTag: deliveryTag,
@@ -239,17 +244,21 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
 
     public static IQueueAdapterReceiver Create(
         string providerName,
+        QueueId queueId,
         string queueName,
         RabbitMqOptions options,
         IRabbitMqConnectorFactory connectorFactory,
         IRabbitMqDataAdapter dataAdapter,
+        IPendingDeliveryTracker pendingDeliveryTracker,
         ILoggerFactory loggerFactory)
             => new RabbitMqAmqpAdapterReceiver(
                 providerName: providerName,
+                queueId: queueId,
                 queueName: queueName,
                 connectorFactory: connectorFactory,
                 options: options,
                 dataAdapter: dataAdapter,
+                pendingDeliveryTracker: pendingDeliveryTracker,
                 loggerFactory: loggerFactory);
 
     [LoggerMessage(

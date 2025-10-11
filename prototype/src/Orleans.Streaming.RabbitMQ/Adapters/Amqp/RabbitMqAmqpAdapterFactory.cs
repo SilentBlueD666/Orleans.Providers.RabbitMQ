@@ -19,12 +19,13 @@ internal sealed class RabbitMqAmqpAdapterFactory(
     RabbitMqOptions options,
     SimpleQueueCacheOptions cacheOptions,
     IRabbitMqDataAdapter dataAdapter,
+    IPendingDeliveryTracker pendingDeliveryTracker,
     TimeProvider timeProvider,
     ILoggerFactory loggerFactory)
     :
     IQueueAdapterFactory
 {
-
+    private readonly IPendingDeliveryTracker _pendingDeliveryTracker = pendingDeliveryTracker;
     private readonly TimeProvider _timeProvider = timeProvider;
     private readonly IRabbitMqQueueProvider _queueProvider = RabbitMqAmqpQueueProvider.Create(providerName, options);
     private readonly SimpleQueueAdapterCache _adapterCache = new(cacheOptions, providerName, loggerFactory);
@@ -44,6 +45,7 @@ internal sealed class RabbitMqAmqpAdapterFactory(
             connectorFactory: connectorFactory,
             dataAdapter: dataAdapter,
             queueProvider: _queueProvider,
+            pendingDeliveryTracker: _pendingDeliveryTracker,
             options: options,
             timeProvider: _timeProvider,
             loggerFactory: loggerFactory);
@@ -76,10 +78,13 @@ internal sealed class RabbitMqAmqpAdapterFactory(
                 rabbitMqOptions,
                 serviceProvider.GetRequiredService<ILoggerFactory>());
 
+        var pendingDeliveryTracker = serviceProvider.GetRequiredKeyedService<IPendingDeliveryTracker>(providerName);
+
         var factory = ActivatorUtilities.CreateInstance<RabbitMqAmqpAdapterFactory>(
             serviceProvider,
             providerName,
             connectorFactory,
+            pendingDeliveryTracker,
             rabbitMqOptions,
             cacheOptions);
 

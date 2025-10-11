@@ -24,6 +24,7 @@ internal partial class RabbitMqAmqpAdapter(
     IRabbitMqConnectorFactory connectorFactory,
     IRabbitMqDataAdapter dataAdapter,
     IRabbitMqQueueProvider queueProvider,
+    IPendingDeliveryTracker pendingDeliveryTracker,
     RabbitMqOptions options,
     TimeProvider timeProvider,
     ILoggerFactory loggerFactory)
@@ -34,6 +35,7 @@ internal partial class RabbitMqAmqpAdapter(
     private readonly IRabbitMqConnectorFactory _connectorFactory = connectorFactory;
     private readonly IRabbitMqDataAdapter _dataAdapter = dataAdapter;
     private readonly IRabbitMqQueueProvider _queueProvider = queueProvider;
+    private readonly IPendingDeliveryTracker _pendingDeliveryTracker = pendingDeliveryTracker;
     private readonly RabbitMqOptions _options = options;
     private readonly TimeProvider _timeProvider = timeProvider;
     private readonly ILoggerFactory _loggerFactory = loggerFactory;
@@ -67,10 +69,12 @@ internal partial class RabbitMqAmqpAdapter(
     public IQueueAdapterReceiver CreateReceiver(QueueId queueId)
         => RabbitMqAmqpAdapterReceiver.Create(
             providerName: Name,
+            queueId: queueId,
             queueName: _queueProvider.GetQueueName(queueId),
             options: _options,
             connectorFactory: _connectorFactory,
             dataAdapter: _dataAdapter,
+            pendingDeliveryTracker: _pendingDeliveryTracker,
             loggerFactory: _loggerFactory);
 
     public async Task QueueMessageBatchAsync<T>(StreamId streamId, IEnumerable<T> events, StreamSequenceToken token, Dictionary<string, object> requestContext)

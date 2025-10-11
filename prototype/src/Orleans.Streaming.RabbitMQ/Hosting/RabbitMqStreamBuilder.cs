@@ -49,7 +49,7 @@ public sealed class SiloRabbitMqStreamConfigurator : SiloPersistentStreamConfigu
         this.ConfigureComponent(RabbitMqOptionsValidator.Create);
         this.ConfigureComponent(SimpleQueueCacheOptionsValidator.Create);
         this.Configure<RabbitMqOptions>(ob
-            => ob.PostConfigure(options 
+            => ob.PostConfigure(options
                 => options.ExchangeName = string.IsNullOrWhiteSpace(options.ExchangeName)
                     ? name
                     : options.ExchangeName));
@@ -61,6 +61,7 @@ public sealed class SiloRabbitMqStreamConfigurator : SiloPersistentStreamConfigu
         });
 
         this.ConfigureDelegate(services => services.TryAddSingleton<IRabbitMqDataAdapter, RabbitMqDataAdapter>());
+        this.ConfigureComponent<IPendingDeliveryTracker, PendingDeliveryTracker>();
     }
 }
 
@@ -86,5 +87,24 @@ public class ClusterClientRabbitMqStreamConfigurator : ClusterClientPersistentSt
         });
 
         this.ConfigureDelegate(services => services.TryAddSingleton<IRabbitMqDataAdapter, RabbitMqDataAdapter>());
+        this.ConfigureComponent<IPendingDeliveryTracker, PendingDeliveryTracker>();
+    }
+}
+
+file static class NamedServiceConfiguratorExtensions
+{
+    /// <summary>
+    /// Adds a singleton component to a named service, with a specific implementation type.
+    /// </summary>
+    /// <remarks>This method registers the specified implementation type as a singleton for the named service.
+    /// The implementation is created using dependency injection via <see cref="ActivatorUtilities"/>.</remarks>
+    /// <typeparam name="TService">The type of the service interface or base class.</typeparam>
+    /// <typeparam name="TImplementation">The type of the concrete implementation to be registered. Must derive from <typeparamref name="TService"/>.</typeparam>
+    /// <param name="configurator">The configurator used to define the named service registration.</param>
+    public static void ConfigureComponent<TService, TImplementation>(this INamedServiceConfigurator configurator)
+        where TService : class
+        where TImplementation : class, TService
+    {
+        configurator.ConfigureDelegate(services => services.TryAddKeyedSingleton<TService>(configurator.Name, (sp, _) => ActivatorUtilities.CreateInstance<TImplementation>(sp)));
     }
 }
