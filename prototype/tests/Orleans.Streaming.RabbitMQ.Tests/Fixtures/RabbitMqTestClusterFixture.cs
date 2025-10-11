@@ -31,7 +31,6 @@ public sealed class RabbitMqTestClusterFixture : BaseTestClusterFixture
                     options.ConnectionString = "amqp://guest:guest@localhost:5672/";
                     options.ExchangeName = "orleans-test-exchange";
                     options.QueueNamePrefix = "orleans-test-queue";
-                    options.DeclareQueue = true;
                 });
             });
         }

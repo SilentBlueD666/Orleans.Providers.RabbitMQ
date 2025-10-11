@@ -8,7 +8,8 @@
 	</PropertyGroup>
 
 	<PropertyGroup>
-		<DefaultTargetFramework>net8.0</DefaultTargetFramework>
-		<CompatibleTargetFramework>netstandard2.0</CompatibleTargetFramework>
+		<LongTermSupportTargetFramework>net8.0</LongTermSupportTargetFramework>
+		<CurrentTargetFramework>net9.0</CurrentTargetFramework>
+		<DefaultTargetFrameworks>$(LongTermSupportTargetFramework);$(CurrentTargetFramework)</DefaultTargetFrameworks>
 	</PropertyGroup>
 </Project>
