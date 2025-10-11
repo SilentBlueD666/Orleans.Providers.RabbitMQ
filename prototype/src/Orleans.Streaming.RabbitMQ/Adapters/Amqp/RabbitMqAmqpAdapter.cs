@@ -57,9 +57,6 @@ internal partial class RabbitMqAmqpAdapter(
             var queueName = queueId.ToString();
             await channel.QueueDeclareAsync(queueName, _options).ConfigureAwait(false);
         }
-
-        var deadLetterQueueName = _options.DeadLetterQueueName ?? DefaultOptionConstants.DeadLetterQueueName;
-        await channel.QueueDeclareAsync(deadLetterQueueName, _options).ConfigureAwait(false);
     }
 
     public IQueueAdapterReceiver CreateReceiver(QueueId queueId)

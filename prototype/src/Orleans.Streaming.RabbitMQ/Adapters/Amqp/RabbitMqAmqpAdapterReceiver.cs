@@ -8,8 +8,8 @@ namespace Orleans.Streaming.RabbitMQ.Adapters.Amqp;
 
 internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceiver
 {
-    private const int ReceiverShutdown = 0;
-    private const int ReceiverRunning = 1;
+    private const int RECEIVER_SHUTDOWN = 0;
+    private const int RECEIVER_RUNNING = 1;
     private static readonly IBatchContainer[] _emptyMessageBatch = Array.Empty<IBatchContainer>();
 
     private readonly string _providerName;
@@ -21,10 +21,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
     private readonly IPendingDeliveryTracker _pendingDeliveryTracker;
     private readonly ILogger _logger;
 
-    private int _receiverState = ReceiverShutdown;
-    private long _messagesConsumedCount;
-    private long _messagesDeliveredCount;
-    private long _messageAcknowledgedCount;
+    private volatile int _receiverState = RECEIVER_SHUTDOWN;
     private long _sequenceNumber = -1;
 
     private bool _initialized;
@@ -57,7 +54,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
 
     public async Task Initialize(TimeSpan timeout)
     {
-        if (ReceiverRunning == Interlocked.Exchange(ref _receiverState, ReceiverRunning))
+        if (RECEIVER_RUNNING == Interlocked.Exchange(ref _receiverState, RECEIVER_RUNNING))
         {
             LogReceiverAlreadyInitialized(_providerName, _queueName);
             return;
@@ -91,7 +88,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
 
     public async Task<IList<IBatchContainer>> GetQueueMessagesAsync(int maxCount)
     {
-        if (!_initialized || _receiverState == ReceiverShutdown)
+        if (!_initialized || _receiverState == RECEIVER_SHUTDOWN)
             return _emptyMessageBatch;
 
         var maxConsumerMessages = _options.MaxConsumerMessages;
@@ -101,86 +98,53 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
 
         var batchContainers = new List<IBatchContainer>();
         var channel = await _consumerConnector.GetChannel().ConfigureAwait(false);
-        int count = 0;
 
         for (int i = 0; i < messagesToConsume; i++)
         {
-            if (_receiverState == ReceiverShutdown)
+            if (_receiverState == RECEIVER_SHUTDOWN)
                 break;
 
             var result = await channel.BasicGetAsync(_queueName, autoAck: false);
             if (result is null)
             {
-                LogNoMoreMessagesInQueue(_queueName, count, _providerName);
+                LogNoMoreMessagesInQueue(_queueName, batchContainers.Count, _providerName);
                 break;
             }
 
+            var deliveryTag = result.DeliveryTag;
             try
             {
                 //TODO: Should we be using our own sequence number or use delivery tag '(long)result.DeliveryTag' from RabbitMQ? https://www.rabbitmq.com/docs/confirms#consumer-acks-delivery-tags
                 var sequenceId = Interlocked.Add(ref _sequenceNumber, 1);
                 var batchContainer = _dataAdapter.FromQueueMessage(queueMessage: result.Body, sequenceId: sequenceId);
-                if (batchContainer is not null)
+                if (batchContainer is null)
                 {
-                    _pendingDeliveryTracker.AddPendingDelivery(_queueId, batchContainer.SequenceToken, result.DeliveryTag);
-                    batchContainers.Add(batchContainer);
-                    count++;
+                    LogReceivedNullMessage(_providerName, _queueName, deliveryTag);
+                    await channel.BasicRejectAsync(deliveryTag).ConfigureAwait(false);
+                    continue;
+                }
 
-                    LogRetrievedMessage(_queueName, batchContainer.StreamId, _providerName, batchContainer.SequenceToken);
-                }
-                else
-                {
-                    LogReceivedNullMessage(_providerName, _queueName);
-                    await OnPoisonMessage(channel, result).ConfigureAwait(false);
-                }
+                batchContainers.Add(batchContainer);
+                _pendingDeliveryTracker.AddPendingDelivery(_queueId, batchContainer.SequenceToken, deliveryTag);
+
+                LogRetrievedMessage(_queueName, batchContainer.StreamId, _providerName, batchContainer.SequenceToken);
             }
             catch (Exception ex)
             {
-                LogErrorProcessingMessage(_providerName, _queueName, ex);
-                await OnPoisonMessage(channel, result).ConfigureAwait(false);
+                LogErrorProcessingMessage(_providerName, _queueName, deliveryTag, ex);
+                await channel.BasicRejectAsync(deliveryTag).ConfigureAwait(false);
             }
         }
 
-        if (count > 0)
-            Interlocked.Add(ref _messagesConsumedCount, count);
-
-        return count == 0
+        return batchContainers.Count == 0
             ? _emptyMessageBatch
             : batchContainers;
     }
 
-    private async ValueTask OnPoisonMessage(IChannel channel, BasicGetResult poisonMessage)
-    {
-        var properties = new BasicProperties(poisonMessage.BasicProperties);
-        properties.Persistent = true;
-        properties.Headers ??= new Dictionary<string, object?>();
-        properties.Headers[HeaderConstants.OriginalQueue] = _queueName;
-        properties.Headers[HeaderConstants.StreamProviderName] = _providerName;
-
-        var routingKey = _options.DeadLetterQueueName ?? DefaultOptionConstants.DeadLetterQueueName;
-
-        if (_options.QueueDeclaration == QueueDeclarationMode.OnDemand)
-            await channel.QueueDeclareAsync(routingKey, _options).ConfigureAwait(false);
-
-        await channel
-            .BasicPublishAsync(
-                exchange: _options.ExchangeName,
-                mandatory: true,
-                routingKey: routingKey,
-                basicProperties: properties,
-                body: poisonMessage.Body)
-            .ConfigureAwait(false);
-
-        await channel.BasicRejectAsync(poisonMessage.DeliveryTag, requeue: false).ConfigureAwait(false);
-    }
-
     public async Task MessagesDeliveredAsync(IList<IBatchContainer> messages)
     {
-        var messagesDeliveredCount = messages.Count;
-        if (messagesDeliveredCount == 0)
+        if (messages.Count == 0)
             return;
-
-        Interlocked.Add(ref _messagesDeliveredCount, messagesDeliveredCount);
 
         try
         {
@@ -196,10 +160,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
             }
 
             if (acknowledgedCount > 0)
-            {
-                Interlocked.Add(ref _messageAcknowledgedCount, acknowledgedCount);
                 LogAcknowledgedMessages(_providerName, acknowledgedCount, _queueName);
-            }
         }
         catch (Exception ex)
         {
@@ -210,7 +171,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
 
     public async Task Shutdown(TimeSpan timeout)
     {
-        if (ReceiverShutdown == Interlocked.Exchange(ref _receiverState, ReceiverShutdown))
+        if (RECEIVER_SHUTDOWN == Interlocked.Exchange(ref _receiverState, RECEIVER_SHUTDOWN))
             return;
 
         var pendingDeliveries = _pendingDeliveryTracker.FindPendingDeliveries(_queueId);
@@ -234,9 +195,8 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
 
                 if (_pendingDeliveryTracker.TryRemovePendingDelivery(_queueId, delivery.Key, out ulong deliveryTag))
                     await channel
-                        .BasicRejectAsync(
+                        .BasicRequeueAsync(
                             deliveryTag: deliveryTag,
-                            requeue: true,
                             cancellationToken: cancellationToken)
                         .ConfigureAwait(false);
             }
@@ -307,14 +267,14 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
     [LoggerMessage(
         EventId = 1006,
         Level = LogLevel.Warning,
-        Message = "Provider {ProviderName} failed to de-serialise the message from queue '{QueueName}', The message will be discarded.")]
-    partial void LogReceivedNullMessage(string providerName, string queueName);
+        Message = "Provider {ProviderName} failed to de-serialise the message from queue '{QueueName}' with delivery tag {DeliveryTag}, The message will be rejected.")]
+    partial void LogReceivedNullMessage(string providerName, string queueName, ulong deliveryTag);
 
     [LoggerMessage(
         EventId = 1007,
         Level = LogLevel.Error,
-        Message = "Provider {ProviderName} error processing message from queue '{QueueName}', The message will be discarded.")]
-    partial void LogErrorProcessingMessage(string providerName, string queueName, Exception exception);
+        Message = "Provider {ProviderName} error processing message from queue '{QueueName}' with delivery tag {DeliveryTag}, The message will be rejected.")]
+    partial void LogErrorProcessingMessage(string providerName, string queueName, ulong deliveryTag, Exception exception);
 
     [LoggerMessage(
     EventId = 1008,

@@ -17,6 +17,27 @@ internal static class RabbitMqChannelExtensions
         => await channel.BasicAckAsync(deliveryTag, multiple: false, cancellationToken).ConfigureAwait(false);
 
     /// <summary>
+    /// Rejects a message from the queue asynchronously, indicating that the message will not be processed.
+    /// </summary>
+    /// <remarks>This method rejects the specified message without requeuing it, meaning the message will be
+    /// discarded. Use this method when the message cannot or should not be processed and should not be
+    /// redelivered.</remarks>
+    /// <param name="channel">The channel through which the message rejection is performed. Cannot be <see langword="null"/>.</param>
+    /// <param name="deliveryTag">The delivery tag of the message to reject. This tag uniquely identifies the message within the channel.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests. The default value is <see cref="CancellationToken.None"/>.</param>
+    public static async ValueTask BasicRejectAsync(this IChannel channel, ulong deliveryTag, CancellationToken cancellationToken = default)
+        => await channel.BasicRejectAsync(deliveryTag, requeue: false, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
+    /// Rejects a message from the queue asynchronously and requests that it be requeued for future processing.
+    /// </summary>
+    /// <param name="channel">The channel through which the message rejection is performed. Cannot be <see langword="null"/>.</param>
+    /// <param name="deliveryTag">The delivery tag of the message to reject. This tag uniquely identifies the message within the channel.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests. The default value is <see cref="CancellationToken.None"/>.</param>
+    public static async ValueTask BasicRequeueAsync(this IChannel channel, ulong deliveryTag, CancellationToken cancellationToken = default)
+        => await channel.BasicRejectAsync(deliveryTag, requeue: true, cancellationToken).ConfigureAwait(false);
+
+    /// <summary>
     /// Declares an exchange.
     /// </summary>
     /// <param name="channel">The channel to declare the exchange on.</param>

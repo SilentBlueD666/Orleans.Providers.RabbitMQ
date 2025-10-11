@@ -125,14 +125,14 @@ public sealed class RabbitMqOptions
     public StreamProviderDirection Mode { get; set; } = StreamProviderDirection.ReadWrite;
 
     /// <summary>
+    /// Defines whether a stream subscription should be faulted when an error occurs. Default is <see langword="true"/>.
+    /// </summary>
+    public bool ShouldFaultSubsriptionOnError { get; set; } = true;
+
+    /// <summary>
     /// Defines whether the stream provider should use a connection string or multiple endpoints for RabbitMQ clustering.
     /// </summary>
     internal bool UseConnectionString => !string.IsNullOrWhiteSpace(ConnectionString) && Endpoints.Count == 0;
-
-    /// <summary>
-    /// Defines the name of the dead-letter queue to use for messages that cannot be processed.
-    /// </summary>
-    public string? DeadLetterQueueName { get; set; }
 
     /// <summary>
     /// Configures the RabbitMQ connection using a connection string.

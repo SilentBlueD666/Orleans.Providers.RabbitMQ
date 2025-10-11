@@ -13,42 +13,63 @@ using System.Xml.Linq;
 
 namespace Orleans.Streaming.RabbitMQ.Adapters.Amqp;
 
-internal sealed class RabbitMqAmqpAdapterFactory(
-    string providerName,
-    IRabbitMqConnectorFactory connectorFactory,
-    RabbitMqOptions options,
-    SimpleQueueCacheOptions cacheOptions,
-    IRabbitMqDataAdapter dataAdapter,
-    IPendingDeliveryTracker pendingDeliveryTracker,
-    TimeProvider timeProvider,
-    ILoggerFactory loggerFactory)
-    :
-    IQueueAdapterFactory
+internal sealed class RabbitMqAmqpAdapterFactory : IQueueAdapterFactory
 {
-    private readonly IPendingDeliveryTracker _pendingDeliveryTracker = pendingDeliveryTracker;
-    private readonly TimeProvider _timeProvider = timeProvider;
-    private readonly IRabbitMqQueueProvider _queueProvider = RabbitMqAmqpQueueProvider.Create(providerName, options);
-    private readonly SimpleQueueAdapterCache _adapterCache = new(cacheOptions, providerName, loggerFactory);
+    private readonly IPendingDeliveryTracker _pendingDeliveryTracker;
+    private readonly Func<QueueId, Task<IStreamFailureHandler>>? _streamFailureHandlerFactory;
+    private readonly TimeProvider _timeProvider;
+    private readonly IRabbitMqDataAdapter _dataAdapter;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly IRabbitMqQueueProvider _queueProvider;
+    private readonly RabbitMqOptions _options;
+    private readonly SimpleQueueAdapterCache _adapterCache;
+    private readonly string _providerName;
+    private readonly IRabbitMqConnectorFactory _connectorFactory;
 
-    public Func<QueueId, Task<IStreamFailureHandler>>? StreamFailureHandlerFactory { private get; set; }
+    private RabbitMqAmqpAdapterFactory(
+        string providerName,
+        IRabbitMqConnectorFactory connectorFactory,
+        IRabbitMqQueueProvider rabbitMqQueueProvider,
+        RabbitMqOptions options,
+        SimpleQueueCacheOptions cacheOptions,
+        IRabbitMqDataAdapter dataAdapter,
+        IPendingDeliveryTracker pendingDeliveryTracker,
+        Func<QueueId, Task<IStreamFailureHandler>>? streamFailureHandlerFactory,
+        TimeProvider timeProvider,
+        ILoggerFactory loggerFactory)
+    {         
+        _providerName = providerName ?? throw new ArgumentNullException(nameof(providerName));
+        _connectorFactory = connectorFactory ?? throw new ArgumentNullException(nameof(connectorFactory));
+        _queueProvider = rabbitMqQueueProvider ?? throw new ArgumentNullException(nameof(rabbitMqQueueProvider));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _pendingDeliveryTracker = pendingDeliveryTracker ?? throw new ArgumentNullException(nameof(pendingDeliveryTracker));
+        _streamFailureHandlerFactory = streamFailureHandlerFactory;
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _dataAdapter = dataAdapter ?? throw new ArgumentNullException(nameof(dataAdapter));
+        _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+
+        _adapterCache = new(cacheOptions, providerName, loggerFactory);
+    }
+
+    public Func<QueueId, Task<IStreamFailureHandler>>? StreamFailureHandlerFactory { get; private set; }
 
     public void Initialize()
     {
-        StreamFailureHandlerFactory = StreamFailureHandlerFactory
+        StreamFailureHandlerFactory = _streamFailureHandlerFactory
             ?? (_ => Task.FromResult<IStreamFailureHandler>(new NoOpStreamDeliveryFailureHandler()));
     }
 
     public async Task<IQueueAdapter> CreateAdapter()
     {
         var adapter = new RabbitMqAmqpAdapter(
-            providerName: providerName,
-            connectorFactory: connectorFactory,
-            dataAdapter: dataAdapter,
+            providerName: _providerName,
+            connectorFactory: _connectorFactory,
+            dataAdapter: _dataAdapter,
             queueProvider: _queueProvider,
             pendingDeliveryTracker: _pendingDeliveryTracker,
-            options: options,
+            options: _options,
             timeProvider: _timeProvider,
-            loggerFactory: loggerFactory);
+            loggerFactory: _loggerFactory);
 
         await adapter.InitializeAsync().ConfigureAwait(false);
 
@@ -67,29 +88,37 @@ internal sealed class RabbitMqAmqpAdapterFactory(
 
     public static IQueueAdapterFactory Create(IServiceProvider serviceProvider, string providerName)
     {
+        var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
+
         var rabbitMqOptions = serviceProvider.GetOptionsByName<RabbitMqOptions>(providerName);
+
         var cacheOptions = serviceProvider.GetOptionsByName<SimpleQueueCacheOptions>(providerName);
 
-        var connectionProvider = serviceProvider.GetRequiredKeyedService<IRabbitMqConnectionProvider>(providerName);
-
-        var connectorFactory = serviceProvider.GetKeyedService<IRabbitMqConnectorFactory>(providerName)
-            ?? new RabbitMqConnectorFactory(
-                connectionProvider,
-                rabbitMqOptions,
-                serviceProvider.GetRequiredService<ILoggerFactory>());
+        var connectorFactory = serviceProvider.GetRequiredKeyedService<IRabbitMqConnectorFactory>(providerName);
 
         var pendingDeliveryTracker = serviceProvider.GetRequiredKeyedService<IPendingDeliveryTracker>(providerName);
 
-        var factory = ActivatorUtilities.CreateInstance<RabbitMqAmqpAdapterFactory>(
-            serviceProvider,
-            providerName,
-            connectorFactory,
-            pendingDeliveryTracker,
-            rabbitMqOptions,
-            cacheOptions);
+        var streamFailureHandlerFactory = serviceProvider.GetKeyedService<Func<QueueId, Task<IStreamFailureHandler>>>(providerName);      
 
-        factory.Initialize();
+        var rabbitMqQueueProvider = serviceProvider.GetRequiredKeyedService<IRabbitMqQueueProvider>(providerName);
 
-        return factory;
+        var dataAdapter = serviceProvider.GetKeyedService<IRabbitMqDataAdapter>(providerName)
+            ?? serviceProvider.GetRequiredService<IRabbitMqDataAdapter>();
+
+        var adapterFactory = new RabbitMqAmqpAdapterFactory(
+            providerName: providerName,
+            connectorFactory: connectorFactory,
+            rabbitMqQueueProvider: rabbitMqQueueProvider,
+            options: rabbitMqOptions,
+            cacheOptions: cacheOptions,
+            dataAdapter: dataAdapter,
+            pendingDeliveryTracker: pendingDeliveryTracker,
+            streamFailureHandlerFactory: streamFailureHandlerFactory,
+            timeProvider: serviceProvider.GetRequiredService<TimeProvider>(),
+            loggerFactory: loggerFactory);
+
+        adapterFactory.Initialize();
+
+        return adapterFactory;
     }
 }

@@ -1,6 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Orleans.Configuration;
 using Orleans.Streaming.RabbitMQ;
@@ -60,6 +59,41 @@ public sealed class SiloRabbitMqStreamConfigurator : SiloPersistentStreamConfigu
             return ActivatorUtilities.CreateInstance<RabbitMqConnectionProvider>(sp, options);
         });
 
+        this.ConfigureComponent<IRabbitMqConnectorFactory>((sp, key) =>
+        {
+            var connectionProvider = sp.GetRequiredKeyedService<IRabbitMqConnectionProvider>(key);
+            var options = sp.GetOptionsByName<RabbitMqOptions>(key);
+            return ActivatorUtilities.CreateInstance<RabbitMqConnectorFactory>(sp, connectionProvider, options);
+        });
+
+        this.ConfigureComponent<IRabbitMqQueueProvider>((sp, key) =>
+        {
+            var options = sp.GetOptionsByName<RabbitMqOptions>(key);
+            return RabbitMqAmqpQueueProvider.Create(key, options);
+        });
+
+        this.ConfigureComponent<Func<QueueId, Task<IStreamFailureHandler>>>((sp, key) =>
+        {
+            var options = sp.GetOptionsByName<RabbitMqOptions>(key);
+            var pendingDeliveryTracker = sp.GetRequiredKeyedService<IPendingDeliveryTracker>(key);
+            var queueProvider = sp.GetRequiredKeyedService<IRabbitMqQueueProvider>(key);
+            var connectorFactory = sp.GetRequiredKeyedService<IRabbitMqConnectorFactory>(key);
+
+            Func<QueueId, Task<IStreamFailureHandler>> streamFailureHandlerFactory = _ =>
+            {
+                var instance = ActivatorUtilities.CreateInstance<RabbitMqAmqpStreamFailureHandler>(
+                    sp, 
+                    pendingDeliveryTracker,
+                    connectorFactory,
+                    queueProvider,
+                    options);
+
+                return Task.FromResult<IStreamFailureHandler>(instance);
+            };
+
+            return streamFailureHandlerFactory;
+        });
+
         this.ConfigureDelegate(services => services.TryAddSingleton<IRabbitMqDataAdapter, RabbitMqDataAdapter>());
         this.ConfigureComponent<IPendingDeliveryTracker, PendingDeliveryTracker>();
     }
@@ -84,6 +118,19 @@ public class ClusterClientRabbitMqStreamConfigurator : ClusterClientPersistentSt
         {
             var options = sp.GetOptionsByName<RabbitMqOptions>(key);
             return ActivatorUtilities.CreateInstance<RabbitMqConnectionProvider>(sp, options);
+        });
+
+        this.ConfigureComponent<IRabbitMqConnectorFactory>((sp, key) =>
+        {
+            var connectionProvider = sp.GetRequiredKeyedService<IRabbitMqConnectionProvider>(key);
+            var options = sp.GetOptionsByName<RabbitMqOptions>(key);
+            return ActivatorUtilities.CreateInstance<RabbitMqConnectorFactory>(sp, connectionProvider, options);
+        });
+
+        this.ConfigureComponent<IRabbitMqQueueProvider>((sp, key) =>
+        {
+            var options = sp.GetOptionsByName<RabbitMqOptions>(key);
+            return RabbitMqAmqpQueueProvider.Create(key, options);
         });
 
         this.ConfigureDelegate(services => services.TryAddSingleton<IRabbitMqDataAdapter, RabbitMqDataAdapter>());
