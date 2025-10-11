@@ -65,6 +65,11 @@ public sealed class RabbitMqOptions
     public QueueDeclarationMode QueueDeclaration { get; set; } = QueueDeclarationMode.AtStartup;
 
     /// <summary>
+    /// Defines the type of the queue to be used, such as classic or quorum, or let RabbitMQ use the default configuration.
+    /// </summary>
+    public QueueType QueueType { get; set; } = QueueType.Default;
+
+    /// <summary>
     /// Gets or sets the number of messages that the consumer can pre-fetch from the queue.
     /// </summary>
     public int PrefetchCount { get; set; } = DefaultOptionConstants.PrefetchCount;
@@ -190,6 +195,7 @@ public sealed class RabbitMqOptions
         VirtualHost = virtualHost;
         UserName = userName;
         Password = password;
+        QueueType = QueueType.Quorum; // Quorum queues are required for clustered setups.
 
         ConnectionString = null; // Clear any existing connection string
     }

@@ -50,13 +50,25 @@ internal static class RabbitMqChannelExtensions
         ArgumentException.ThrowIfNullOrWhiteSpace(queueName);
         ArgumentNullException.ThrowIfNull(options);
 
+        var queueArguments = options.QueueArguments;
+        if (options.QueueType != QueueType.Default)
+        {
+            queueArguments ??= new Dictionary<string, object?>();
+            queueArguments[Headers.XQueueType] = options.QueueType switch
+            {
+                QueueType.Classic => "classic",
+                QueueType.Quorum => "quorum",
+                _ => throw new NotSupportedException($"The queue type '{options.QueueType}' is not supported.")
+            };
+        }
+
         await channel
             .QueueDeclareAsync(
                 queue: queueName,
                 durable: options.QueueDurable,
                 exclusive: false,
                 autoDelete: options.AutoDelete,
-                arguments: options.QueueArguments,
+                arguments: queueArguments,
                 cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
