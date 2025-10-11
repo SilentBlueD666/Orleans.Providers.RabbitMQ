@@ -1,16 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
 using Orleans.Configuration;
-using Orleans.Providers.Streams.Common;
+using Orleans.Streaming.RabbitMQ.Config;
 using Orleans.Streams;
 using RabbitMQ.Client;
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Channels;
-using System.Threading.Tasks;
 
 namespace Orleans.Streaming.RabbitMQ.Adapters.Amqp;
 
@@ -107,11 +99,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
             ? Math.Min(maxCount, maxConsumerMessages)
             : maxCount;
 
-        const int initialBufferSize = 32;
-        var buffer = messagesToConsume <= initialBufferSize
-            ? new IBatchContainer[messagesToConsume]
-            : new IBatchContainer[initialBufferSize];
-
+        var batchContainers = new List<IBatchContainer>();
         var channel = await _consumerConnector.GetChannel().ConfigureAwait(false);
         int count = 0;
 
@@ -127,7 +115,6 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
                 break;
             }
 
-            //TODO: DLQ logic ??? Currently we just reject/discard the message if we can't de-serialise or process it.
             try
             {
                 //TODO: Should we be using our own sequence number or use delivery tag '(long)result.DeliveryTag' from RabbitMQ? https://www.rabbitmq.com/docs/confirms#consumer-acks-delivery-tags
@@ -135,36 +122,56 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
                 var batchContainer = _dataAdapter.FromQueueMessage(queueMessage: result.Body, sequenceId: sequenceId);
                 if (batchContainer is not null)
                 {
-                    if (count >= buffer.Length)
-                        Array.Resize(ref buffer, Math.Min(buffer.Length * 2, messagesToConsume));
-
-                    buffer[count++] = batchContainer;
                     _pendingDeliveryTracker.AddPendingDelivery(_queueId, batchContainer.SequenceToken, result.DeliveryTag);
+                    batchContainers.Add(batchContainer);
+                    count++;
 
                     LogRetrievedMessage(_queueName, batchContainer.StreamId, _providerName, batchContainer.SequenceToken);
                 }
                 else
                 {
                     LogReceivedNullMessage(_providerName, _queueName);
-                    await channel.BasicRejectAsync(result.DeliveryTag, requeue: false).ConfigureAwait(false);
+                    await OnPoisonMessage(channel, result).ConfigureAwait(false);
                 }
             }
             catch (Exception ex)
             {
                 LogErrorProcessingMessage(_providerName, _queueName, ex);
-                await channel.BasicRejectAsync(result.DeliveryTag, requeue: false).ConfigureAwait(false);
+                await OnPoisonMessage(channel, result).ConfigureAwait(false);
             }
         }
 
         if (count > 0)
             Interlocked.Add(ref _messagesConsumedCount, count);
 
-        return count switch
-        {
-            0 => _emptyMessageBatch,
-            _ when count == buffer.Length => buffer,
-            _ => buffer[..count]
-        };
+        return count == 0
+            ? _emptyMessageBatch
+            : batchContainers;
+    }
+
+    private async ValueTask OnPoisonMessage(IChannel channel, BasicGetResult poisonMessage)
+    {
+        var properties = new BasicProperties(poisonMessage.BasicProperties);
+        properties.Persistent = true;
+        properties.Headers ??= new Dictionary<string, object?>();
+        properties.Headers[HeaderConstants.OriginalQueue] = _queueName;
+        properties.Headers[HeaderConstants.StreamProviderName] = _providerName;
+
+        var routingKey = _options.DeadLetterQueueName ?? DefaultOptionConstants.DeadLetterQueueName;
+
+        if (_options.QueueDeclaration == QueueDeclarationMode.OnDemand)
+            await channel.QueueDeclareAsync(routingKey, _options).ConfigureAwait(false);
+
+        await channel
+            .BasicPublishAsync(
+                exchange: _options.ExchangeName,
+                mandatory: true,
+                routingKey: routingKey,
+                basicProperties: properties,
+                body: poisonMessage.Body)
+            .ConfigureAwait(false);
+
+        await channel.BasicRejectAsync(poisonMessage.DeliveryTag, requeue: false).ConfigureAwait(false);
     }
 
     public async Task MessagesDeliveredAsync(IList<IBatchContainer> messages)
@@ -197,7 +204,7 @@ internal sealed partial class RabbitMqAmqpAdapterReceiver : IQueueAdapterReceive
         catch (Exception ex)
         {
             LogErrorAcknowledgingMessages(_providerName, _queueName, ex);
-            //TODO: Messages will remain in the pending dictionary and on the queue, need to handle re-queueing or poison queue logic...
+            //TODO: Messages will remain in the pending tracker and on the queue, need to handle re-queueing or poison queue logic...
         }
     }
 

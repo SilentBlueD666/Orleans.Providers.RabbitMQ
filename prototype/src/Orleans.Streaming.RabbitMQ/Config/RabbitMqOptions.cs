@@ -125,6 +125,11 @@ public sealed class RabbitMqOptions
     internal bool UseConnectionString => !string.IsNullOrWhiteSpace(ConnectionString) && Endpoints.Count == 0;
 
     /// <summary>
+    /// Defines the name of the dead-letter queue to use for messages that cannot be processed.
+    /// </summary>
+    public string? DeadLetterQueueName { get; set; }
+
+    /// <summary>
     /// Configures the RabbitMQ connection using a connection string.
     /// </summary>
     /// <param name="connectionString">A valid formatted RabbitMQ connection string, e.g. amqp://guest:guest@localhost:5672/</param>

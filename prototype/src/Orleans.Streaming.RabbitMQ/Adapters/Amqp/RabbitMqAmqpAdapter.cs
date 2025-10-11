@@ -1,15 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
 using Orleans.Configuration;
-using Orleans.Providers.Streams.Common;
-using Orleans.Runtime;
+using Orleans.Streaming.RabbitMQ.Config;
 using Orleans.Streams;
-using RabbitMQ.Client;
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Orleans.Streaming.RabbitMQ.Adapters.Amqp;
 
@@ -64,6 +57,9 @@ internal partial class RabbitMqAmqpAdapter(
             var queueName = queueId.ToString();
             await channel.QueueDeclareAsync(queueName, _options).ConfigureAwait(false);
         }
+
+        var deadLetterQueueName = _options.DeadLetterQueueName ?? DefaultOptionConstants.DeadLetterQueueName;
+        await channel.QueueDeclareAsync(deadLetterQueueName, _options).ConfigureAwait(false);
     }
 
     public IQueueAdapterReceiver CreateReceiver(QueueId queueId)

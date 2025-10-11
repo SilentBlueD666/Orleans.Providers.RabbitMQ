@@ -5,7 +5,6 @@ public static class HeaderConstants
     public const string StreamId = "orleans-stream-id";
     public const string StreamNamespace = "orleans-stream-namespace";
     public const string StreamProviderName = "orleans-stream-provider-name";
-    //public const string StreamQueueId = "orleans-stream-queue-id";
-    //public const string StreamSequence = "orleans-stream-sequence-token";
-    //public const string MessageSchemaVersion = "orleans-stream-message-schema-version";
+
+    public const string OriginalQueue = "orleans-stream-original-queue";
 }
