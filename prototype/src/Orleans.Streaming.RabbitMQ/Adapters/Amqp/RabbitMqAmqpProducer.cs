@@ -72,9 +72,12 @@ internal sealed partial class RabbitMqAmqpProducer(
         var messageBody = _dataAdapter.ToQueueMessage(streamId, events, requestContext);
         var properties = new BasicProperties()
         {
-            Headers = new Dictionary<string, object?>(1)
+            Headers = new Dictionary<string, object?>(4)
             {
-                { HeaderConstants.StreamId, streamId.ToString() }
+                { HeaderConstants.StreamId, streamId.ToString() },
+                { HeaderConstants.StreamNamespace, streamId.GetNamespace() },
+                { HeaderConstants.StreamProviderName, _providerName },
+                { HeaderConstants.OriginalQueue, _queueName },
             },
             MessageId = messageId.ToString(),
             Persistent = true,
@@ -82,16 +85,17 @@ internal sealed partial class RabbitMqAmqpProducer(
         };
 
         var channel = await _producerConnector.GetChannel().ConfigureAwait(false);
-        await _publishLock.WaitAsync();
+        await _publishLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            await channel.BasicPublishAsync(
-                exchange: _options.ExchangeName,
-                mandatory: true,
-                routingKey: _queueName,
-                basicProperties: properties,
-                body: messageBody
-            );
+            await channel
+                .BasicPublishAsync(
+                    exchange: _options.ExchangeName,
+                    mandatory: true,
+                    routingKey: _queueName,
+                    basicProperties: properties,
+                    body: messageBody)
+                .ConfigureAwait(false);
         }
         finally
         {
