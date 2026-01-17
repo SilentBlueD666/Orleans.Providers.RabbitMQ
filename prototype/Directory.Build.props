@@ -9,7 +9,7 @@
 
 	<PropertyGroup>
 		<LongTermSupportTargetFramework>net8.0</LongTermSupportTargetFramework>
-		<CurrentTargetFramework>net9.0</CurrentTargetFramework>
+		<CurrentTargetFramework>net10.0</CurrentTargetFramework>
 		<DefaultTargetFrameworks>$(LongTermSupportTargetFramework);$(CurrentTargetFramework)</DefaultTargetFrameworks>
 	</PropertyGroup>
 </Project>

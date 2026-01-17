@@ -6,7 +6,6 @@
 
 	<ItemGroup>
 		<PackageReference Include="Aspire.StackExchange.Redis" />
-		<PackageReference Include="Microsoft.Extensions.Hosting" />
 		<PackageReference Include="Microsoft.Orleans.Client" />
 		<PackageReference Include="Microsoft.Orleans.Clustering.Redis" />
 	</ItemGroup>
