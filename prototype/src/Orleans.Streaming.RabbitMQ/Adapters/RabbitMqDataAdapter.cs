@@ -2,6 +2,7 @@
 using Orleans.Serialization;
 using Orleans.Streams;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -16,12 +17,12 @@ internal sealed class RabbitMqDataAdapter(Serializer serializer, TimeProvider ti
 
     public IBatchContainer FromQueueMessage(ReadOnlyMemory<byte> queueMessage, long sequenceId)
     {
-        var message = _serializer.Deserialize(queueMessage.Span);
+        var message = _serializer.Deserialize(queueMessage);
         message.RealSequenceToken = new EventSequenceTokenV2(sequenceId);
         return message;
     }
 
-    public ReadOnlyMemory<byte> ToQueueMessage<T>(StreamId streamId, IEnumerable<T> events, Dictionary<string, object> requestContext)
+    public void ToQueueMessage<T>(StreamId streamId, IEnumerable<T> events, Dictionary<string, object> requestContext, IBufferWriter<byte> bufferWriter)
     {
         var container = new RabbitMqBatchContainer(
             streamId: streamId,
@@ -29,7 +30,6 @@ internal sealed class RabbitMqDataAdapter(Serializer serializer, TimeProvider ti
             requestContext: requestContext ?? [],
             enqueueTime: _timeProvider.GetUtcNow().DateTime);
 
-        var payload = _serializer.SerializeToArray(container);
-        return payload;
+        _serializer.Serialize(container, bufferWriter);
     }
 }

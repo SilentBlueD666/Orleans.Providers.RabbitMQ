@@ -2,6 +2,7 @@
 using Orleans.Serialization;
 using Orleans.Streams;
 using System;
+using System.Buffers;
 
 namespace Orleans.Streaming.RabbitMQ.Adapters;
 
@@ -16,15 +17,15 @@ public interface IRabbitMqDataAdapter<TMessageBatch>
     where TMessageBatch : class, IBatchContainer
 {
     /// <summary>
-    /// Creates a cloud queue message from stream event data.
+    /// Serializes the specified events and writes them as a queue message for the given stream using the provided
+    /// buffer writer and request context.
     /// </summary>
-    /// <typeparam name="T">The stream event type.</typeparam>
-    /// <param name="streamId">The stream identifier.</param>
-    /// <param name="events">The events.</param>
-    /// <param name="token">The token.</param>
-    /// <param name="requestContext">The request context.</param>
-    /// <returns>A read-only memory block containing the serialized queue message.</returns>
-    ReadOnlyMemory<byte> ToQueueMessage<T>(StreamId streamId, IEnumerable<T> events, Dictionary<string, object> requestContext);
+    /// <typeparam name="T">The type of the events to be serialized and included in the queue message.</typeparam>
+    /// <param name="streamId">The identifier of the stream to which the queue message will be associated.</param>
+    /// <param name="events">The collection of events to serialize and include in the queue message. Cannot be null.</param>
+    /// <param name="requestContext">A dictionary containing contextual information to be included with the queue message. Cannot be null.</param>
+    /// <param name="bufferWriter">The buffer writer used to write the serialized queue message. Cannot be null.</param>
+    void ToQueueMessage<T>(StreamId streamId, IEnumerable<T> events, Dictionary<string, object> requestContext, IBufferWriter<byte> bufferWriter);
 
     /// <summary>
     /// Converts a queue message into a batch of messages.

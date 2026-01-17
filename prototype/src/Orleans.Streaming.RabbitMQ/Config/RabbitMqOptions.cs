@@ -130,6 +130,11 @@ public sealed class RabbitMqOptions
     public bool ShouldFaultSubsriptionOnError { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the maximum duration to wait for a publish operation to complete before timing out.
+    /// </summary>
+    public TimeSpan PublishTimeout { get; set; } = DefaultOptionConstants.PublishTimeout;
+
+    /// <summary>
     /// Defines whether the stream provider should use a connection string or multiple endpoints for RabbitMQ clustering.
     /// </summary>
     internal bool UseConnectionString => !string.IsNullOrWhiteSpace(ConnectionString) && Endpoints.Count == 0;

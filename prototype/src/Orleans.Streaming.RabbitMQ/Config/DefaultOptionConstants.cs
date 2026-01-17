@@ -23,4 +23,6 @@ public static class DefaultOptionConstants
     public const string Password = "guest";
     public const bool Durable = true;
     public const bool AutoDelete = false;
+
+    public static readonly TimeSpan PublishTimeout = TimeSpan.FromSeconds(30);
 }

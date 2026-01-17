@@ -4,6 +4,7 @@ using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
 using Orleans.Streams;
 using RabbitMQ.Client;
+using System.Buffers;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Channels;
@@ -50,10 +51,10 @@ internal sealed partial class RabbitMqAmqpProducer(
         _initialized = true;
     }
 
-    public async ValueTask SendMessage<T>(StreamId streamId, T @event, Dictionary<string, object> requestContext)
-        => await SendMessage(streamId, [@event], requestContext).ConfigureAwait(false);
+    public async ValueTask SendMessage<T>(StreamId streamId, T @event, Dictionary<string, object> requestContext, CancellationToken cancellationToken = default)
+        => await SendMessage(streamId, [@event], requestContext, cancellationToken).ConfigureAwait(false);
 
-    public async ValueTask SendMessage<T>(StreamId streamId, IEnumerable<T> events, Dictionary<string, object> requestContext)
+    public async ValueTask SendMessage<T>(StreamId streamId, IEnumerable<T> events, Dictionary<string, object> requestContext, CancellationToken cancellationToken = default)
     {
         if (_disposed)
             throw new ObjectDisposedException(nameof(RabbitMqAmqpProducer));
@@ -69,8 +70,12 @@ internal sealed partial class RabbitMqAmqpProducer(
         // For .NET 8 and earlier, we use a standard GUID
         var messageId = Guid.NewGuid();
 #endif
-        var messageBody = _dataAdapter.ToQueueMessage(streamId, events, requestContext);
-        var properties = new BasicProperties()
+
+        using var bufferWriter = new PooledArrayBufferWriter();
+        _dataAdapter.ToQueueMessage(streamId, events, requestContext, bufferWriter);
+        
+        var messageBody = bufferWriter.WrittenMemory;
+        var messageProperties = new BasicProperties()
         {
             Headers = new Dictionary<string, object?>(4)
             {
@@ -85,7 +90,7 @@ internal sealed partial class RabbitMqAmqpProducer(
         };
 
         var channel = await _producerConnector.GetChannel().ConfigureAwait(false);
-        await _publishLock.WaitAsync().ConfigureAwait(false);
+        await _publishLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await channel
@@ -93,8 +98,9 @@ internal sealed partial class RabbitMqAmqpProducer(
                     exchange: _options.ExchangeName,
                     mandatory: true,
                     routingKey: _queueName,
-                    basicProperties: properties,
-                    body: messageBody)
+                    basicProperties: messageProperties,
+                    body: messageBody,
+                    cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
         }
         finally

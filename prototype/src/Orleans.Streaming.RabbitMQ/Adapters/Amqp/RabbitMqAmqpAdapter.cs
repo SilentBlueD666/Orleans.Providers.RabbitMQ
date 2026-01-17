@@ -87,13 +87,31 @@ internal partial class RabbitMqAmqpAdapter(
                 timeProvider: _timeProvider,
                 loggerFactory: _loggerFactory));
 
+        var publishTimeout = _options.PublishTimeout;
+
         if (_options.SendAsBatch)
-            await producer.SendMessage(streamId, events, requestContext).ConfigureAwait(false);
+        {
+            using var cancellationTokenSource = new CancellationTokenSource(publishTimeout);
+            await producer
+                .SendMessage(
+                    streamId: streamId, 
+                    events: events, 
+                    requestContext: requestContext, 
+                    cancellationToken: cancellationTokenSource.Token)
+                .ConfigureAwait(false);
+        }
         else
         {
             foreach (var @event in events)
             {
-                await producer.SendMessage(streamId, @event, requestContext).ConfigureAwait(false);
+                using var cancellationTokenSource = new CancellationTokenSource(publishTimeout);
+                await producer
+                    .SendMessage(
+                        streamId: streamId, 
+                        @event: @event, 
+                        requestContext: requestContext, 
+                        cancellationToken: cancellationTokenSource.Token)
+                    .ConfigureAwait(false);
             }
         }
     }
