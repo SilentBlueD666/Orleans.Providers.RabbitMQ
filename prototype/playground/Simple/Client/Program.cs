@@ -22,7 +22,7 @@ builder.UseOrleansClient(client
         {
             ob.Configure(options =>
             {
-                options.ConnectionString = "amqp://guest:guest@localhost:5672/";
+                options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq")!;
                 options.ExchangeName = "orleans-test-exchange";
                 options.QueueNamePrefix = "orleans-test-queue";
                 options.ConnectionNamePrefix = "Orleans.Streaming.Client.RabbitMQ";
