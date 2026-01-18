@@ -9,7 +9,6 @@ namespace Orleans.Streaming.RabbitMQ.Config;
 public static class DefaultOptionConstants
 {
     public const string ConnectionString = "amqp://guest:guest@localhost:5672/";
-    public const string AmqpStreamProviderName = "rabbitmq-amqp-stream-provider";
     public const string QueueNamePrefix = "orleans-queue";
     public const string ExchangeName = "orleans-stream";
     public const string ExchangeType = "direct";

@@ -1,4 +1,4 @@
-﻿using Common;
+﻿using GrainInterfaces;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Orleans.Configuration;
@@ -13,18 +13,11 @@ builder.Logging
     .SetMinimumLevel(LogLevel.Debug)
     .AddFilter("Orleans", LogLevel.Information);
 
+var rabbitMqConnectionString = builder.Configuration.GetConnectionString("rabbitmq")
+    ?? throw new InvalidOperationException("RabbitMQ connection string is not configured.");
+
 builder.UseOrleans(siloBuilder
-    => siloBuilder
-        .AddRabbitMq(Constants.StreamProvider, ob =>
-        {
-            ob.Configure(options =>
-            {
-                options.ConnectionString = builder.Configuration.GetConnectionString("rabbitmq")!;
-                options.ExchangeName = "orleans-test-exchange";
-                options.QueueNamePrefix = "orleans-test-queue";
-                options.ConnectionNamePrefix = "Orleans.Streaming.Silo.RabbitMQ";
-            });
-        }));
+    => siloBuilder.AddRabbitMq(Constants.StreamProvider, rabbitMqConnectionString));
 
 var app = builder.Build();
 

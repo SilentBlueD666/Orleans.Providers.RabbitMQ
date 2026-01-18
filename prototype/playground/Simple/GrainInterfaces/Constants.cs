@@ -1,4 +1,4 @@
-﻿namespace Common;
+﻿namespace GrainInterfaces;
 
 public static class Constants
 {

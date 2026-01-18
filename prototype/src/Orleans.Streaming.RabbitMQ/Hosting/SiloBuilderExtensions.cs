@@ -14,37 +14,19 @@ namespace Orleans.Hosting;
 
 public static class SiloBuilderExtensions
 {
-    private static readonly HashSet<string> _registeredStreamProviders = new HashSet<string>();
-
     /// <summary>
-    /// Add RabbitMQ AMQP stream provider with default name and options configured from the <c>RabbitMqOptions.SectionName</c> section of the configuration.
-    /// </summary>
-    /// <param name="builder">The silo builder.</param>
-    /// <returns>The current instance of <see cref="ISiloBuilder"/>.</returns>
-    public static ISiloBuilder AddRabbitMq(this ISiloBuilder builder)
-        => builder.AddRabbitMq(DefaultOptionConstants.AmqpStreamProviderName);
-
-    /// <summary>
-    /// Add RabbitMQ AMQP stream provider with options configured from the <c>RabbitMqOptions.SectionName</c> section of the configuration.
+    /// Add RabbitMQ AMQP stream provider specifying a provider name and only a connection string; all other settings use defaults.
     /// </summary>
     /// <param name="builder">The silo builder.</param>
     /// <param name="name">The name of the stream provider.</param>
+    /// <param name="connectionString">The RabbitMQ connection string.</param>
     /// <returns>The current instance of <see cref="ISiloBuilder"/>.</returns>
-    public static ISiloBuilder AddRabbitMq(this ISiloBuilder builder, string name) 
-        => builder
-            .AddRabbitMq(name, (Action<OptionsBuilder<RabbitMqOptions>>)(options =>
-            {
-                builder.Configuration.GetSection(RabbitMqOptions.SectionName).Bind(options);
-            }));
+    public static ISiloBuilder AddRabbitMq(this ISiloBuilder builder, string name, string connectionString)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
-    /// <summary>
-    /// Configure the silo to use RabbitMQ AMQP as a persistent streams with default name.
-    /// </summary>
-    /// <param name="builder">The silo builder.</param>
-    /// <param name="configure">The action used to configure the RabbitMQ stream provider.</param>
-    /// <returns>The current instance of <see cref="ISiloBuilder"/>.</returns>
-    public static ISiloBuilder AddRabbitMq(this ISiloBuilder builder, Action<ISiloRabbitMqStreamConfigurator> configure)
-        => builder.AddRabbitMq(DefaultOptionConstants.AmqpStreamProviderName, configure);
+        return builder.AddRabbitMq(name, ob => ob.Configure(options => options.ConnectionString = connectionString));
+    }
 
     /// <summary>
     /// Configure the silo to use RabbitMQ AMQP as a persistent streams.
@@ -55,8 +37,7 @@ public static class SiloBuilderExtensions
     /// <returns>The current instance of <see cref="ISiloBuilder"/>.</returns>
     public static ISiloBuilder AddRabbitMq(this ISiloBuilder builder, string name, Action<ISiloRabbitMqStreamConfigurator> configure)
     {
-        if (!_registeredStreamProviders.Add(name))
-            throw new ArgumentException($"A stream provider with the name '{name}' is already registered.", nameof(name));
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         builder.AddMemoryGrainStorage(name);
 
@@ -68,15 +49,6 @@ public static class SiloBuilderExtensions
 
         return builder;
     }
-
-    /// <summary>
-    /// Configure the silo to use RabbitMQ AMQP as a persistent streams with default name and settings.
-    /// </summary>
-    /// <param name="builder">The silo builder.</param>
-    /// <param name="configureOptions">The action used to configure the RabbitMQ options.</param>
-    /// <returns>The current instance of <see cref="ISiloBuilder"/>.</returns>
-    public static ISiloBuilder AddRabbitMq(this ISiloBuilder builder, Action<OptionsBuilder<RabbitMqOptions>> configureOptions)
-        => builder.AddRabbitMq(DefaultOptionConstants.AmqpStreamProviderName, configureOptions);
 
     /// <summary>
     /// Configure the silo to use RabbitMQ AMQP as a persistent streams with default settings.
