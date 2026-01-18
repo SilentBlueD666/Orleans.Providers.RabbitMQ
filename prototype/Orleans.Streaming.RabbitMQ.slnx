@@ -1,0 +1,23 @@
+<Solution>
+  <Folder Name="/playground/" />
+  <Folder Name="/playground/Simple/">
+    <Project Path="playground/Simple/AspireHost/AspireHost/AspireHost.AppHost/AspireHost.AppHost.csproj" />
+    <Project Path="playground/Simple/AspireHost/AspireHost/AspireHost.ServiceDefaults/AspireHost.ServiceDefaults.csproj" />
+    <Project Path="playground/Simple/Client/Client.csproj" />
+    <Project Path="playground/Simple/GrainInterfaces/GrainInterfaces.csproj" />
+    <Project Path="playground/Simple/Grains/Grains.csproj" />
+    <Project Path="playground/Simple/SiloHost/SiloHost.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="nuget.config" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Orleans.Streaming.RabbitMQ/Orleans.Streaming.RabbitMQ.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Orleans.Streaming.RabbitMQ.Tests/Orleans.Streaming.RabbitMQ.Tests.csproj" />
+  </Folder>
+</Solution>
