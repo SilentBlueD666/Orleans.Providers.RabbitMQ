@@ -5,7 +5,7 @@ using Orleans.Streams;
 
 namespace Orleans.Streaming.RabbitMQ.Tests.Grains;
 
-public class ProducerGrain : Grain, IProducerGrain
+public sealed class ProducerGrain : Grain, IProducerGrain
 {
     private IAsyncStream<string>? _stream;
     private readonly ILogger _logger;
@@ -15,13 +15,13 @@ public class ProducerGrain : Grain, IProducerGrain
         _logger = logger;
     }
 
-    public override async Task OnActivateAsync(CancellationToken cancellationToken)
+    public override Task OnActivateAsync(CancellationToken cancellationToken)
     {
         var streamId = StreamId.Create(TestConstants.MessageStreamNamespace, this.GetPrimaryKey());
         var streamProvider = this.GetStreamProvider(TestConstants.StreamProvider);
         
         _stream = streamProvider.GetStream<string>(streamId);
-        await base.OnActivateAsync(cancellationToken);
+        return base.OnActivateAsync(cancellationToken);
     }
 
     public async Task SendMessage(string message)

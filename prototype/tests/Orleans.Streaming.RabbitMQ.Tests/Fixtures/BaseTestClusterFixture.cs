@@ -43,7 +43,7 @@ public abstract class BaseTestClusterFixture : IAsyncLifetime
     /// <param name="builder"></param>
     protected virtual void ConfigureTestCluster(TestClusterBuilder builder) { }
 
-    public async Task InitializeAsync()
+    public virtual async Task InitializeAsync()
     {
         var builder = new TestClusterBuilder();
         TestDefaultConfiguration.ConfigureTestCluster(builder);
@@ -57,7 +57,7 @@ public abstract class BaseTestClusterFixture : IAsyncLifetime
         this.Logger = this.LoggerFactory.CreateLogger("Application");
     }
 
-    public async Task DisposeAsync()
+    public virtual async Task DisposeAsync()
     {
         var cluster = this.HostedCluster;
         if (cluster is null) return;
